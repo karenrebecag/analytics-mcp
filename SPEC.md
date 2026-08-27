@@ -205,6 +205,56 @@ src/instructions.ts
   CRITERIA: fixture tests per tool; normalize table tests; §3 F2 gates.
 ```
 
+### Phase F2.5 — semantic layer (after F2)
+
+The server codifies business *criterion* — never reasoning. It knows facts
+the client LLM cannot know (how each tracker counts, what discrepancy is
+structural); it never decides what matters. No LLM inside the server, ever.
+
+```
+src/semantics/knowledge.ts
+  # The codified criterion. Pure data module, no I/O, no env reads.
+  # - METRIC_SEMANTICS: per canonical metric x source -> { native, definition,
+  #   caveats }  (e.g. cloudflare counts at the edge and includes some bots;
+  #   ga4 counts post-JS and loses adblocked sessions). Native names and limits
+  #   come from F1/F2 captures, not memory.
+  # - EXPECTED_DISCREPANCY: per (metric, sourceA, sourceB) -> { maxRatio, reason }.
+  #   GENERIC source-pair knowledge only. Per-site expectations are runtime
+  #   config: optional `expectations` block in SITES_CONFIG (sites.ts schema
+  #   extends; sites.example.json shows fictitious values). Org decoupling
+  #   forbids any site-specific number in this module.
+  # - VALIDATION_RULES: request-shape criteria verified against captures
+  #   (e.g. per-source max range at day granularity, metric coverage per source).
+src/resources/metrics.ts
+  # MCP resource analytics://metrics (and analytics://metrics/<siteId> when the
+  # site has an `expectations` block): METRIC_SEMANTICS + EXPECTED_DISCREPANCY
+  # rendered as JSON. Passive context so the client can reason about what it is
+  # comparing without a tool call.
+src/resources/index.ts
+  # Resource registration; server.ts gains the resources capability (still
+  # transport-agnostic).
+src/prompts/interpret-query.ts
+  # MCP prompt: how to read query() output — expected discrepancies are noted,
+  # a failed source slot means "no data from X", never "zero traffic"; compare
+  # canonical metrics only.
+src/tools/explain-discrepancy.ts
+  # { metric, sourceA, sourceB, valueA, valueB, site? } -> deterministic:
+  # actual ratio vs EXPECTED_DISCREPANCY (site expectations override when
+  # configured), { isNormal, reason, suggestion }. Pure function over
+  # knowledge.ts — trivially unit-tested, no network.
+src/tools/validate-query.ts
+  # Dry-run a QueryRequest against VALIDATION_RULES + site bindings + metric
+  # coverage. Returns { valid, issues: [...] } — advisory, never blocks query().
+src/instructions.ts
+  # Update: point the client at analytics://metrics and the interpret-query
+  # prompt before deep analysis.
+  CRITERIA: unit tests for explain-discrepancy (normal / abnormal / unknown
+  pair -> honest "no criterion for this pair", never a made-up range) and
+  validate-query; resource render test. Gate S-F25-1.
+  EXPLICITLY OUT: any LLM call inside the server; a suggest-next tool (pure
+  client reasoning); per-site "normal" values hardcoded anywhere.
+```
+
 ### Phase F3 — remote OAuth + Vercel entry
 
 ```
@@ -283,6 +333,7 @@ Included in `pnpm verify`. Budget: ~15–20 tests total at F5 — no padding.
 | S-F1-1 | F1 | `writeCapture` resolves only under `scratch/`; traversal (`../x`) rejected |
 | S-F1-2 | F1 | Adapter upstream error with a 10KB body + Authorization header set → thrown message ≤ 400 chars and excludes the header value |
 | S-F2-1 | F2 | `query_raw` with a source id outside SOURCE_IDS → schema rejection (allowlist), message lists valid ids |
+| S-F25-1 | F2.5 | `src/semantics/` is org-free: forbidden-terms grep covers it and a structural check proves per-site expectations reach the module only via runtime config, never constants |
 | S-F3-1 | F3 | `code_challenge_method=plain` → 400 (S256 pinned) |
 | S-F3-2 | F3 | Unregistered / near-miss redirect_uri (`https://evil.example`, registered-host prefix tricks, `javascript:` scheme) → 400, never redirected |
 | S-F3-3 | F3 | A refresh token presented as Bearer to /mcp → 401 |
