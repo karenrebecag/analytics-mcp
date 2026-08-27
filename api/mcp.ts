@@ -10,7 +10,6 @@
  * the OAuth flow instead of simply failing.
  */
 import type { IncomingMessage, ServerResponse } from 'http';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { jwtVerify } from 'jose';
 import {
   AuthStateUnavailableError,
@@ -19,7 +18,7 @@ import {
 } from './_shared/auth-state.js';
 import { baseUrl, issuerName, signingSecret } from './_shared/config.js';
 import { setCors } from './_shared/utils.js';
-import { createServer } from '../src/server.js';
+import { CORS_HEADERS, CORS_METHODS, handleMcpRequest } from '../src/http-handler.js';
 
 export const config = { runtime: 'nodejs', maxDuration: 30 };
 
@@ -115,7 +114,7 @@ export default async function handler(
   req: IncomingMessage & { body?: unknown },
   res: ServerResponse,
 ) {
-  setCors(res, 'GET, POST, DELETE, OPTIONS', 'Content-Type, Accept, Authorization, Mcp-Session-Id');
+  setCors(res, CORS_METHODS, CORS_HEADERS);
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
     res.end();
@@ -144,18 +143,5 @@ export default async function handler(
     return;
   }
 
-  const server = createServer();
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-  try {
-    await server.connect(transport);
-    await transport.handleRequest(req, res, req.body);
-  } catch (err) {
-    if (!res.headersSent) {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'server_error' }));
-    }
-    process.stderr.write(
-      `mcp handler error: ${err instanceof Error ? err.message : String(err)}\n`,
-    );
-  }
+  await handleMcpRequest(req, res, req.body);
 }

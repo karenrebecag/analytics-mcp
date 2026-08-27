@@ -18,7 +18,8 @@
     "format:check": "prettier --check 'src/**/*.ts' 'api/**/*.ts' 'tests/**/*.ts'",
     "test": "vitest run",
     "gates": "pnpm build && vitest run --config vitest.gates.config.ts",
-    "verify": "pnpm check && pnpm lint && pnpm format:check && pnpm test && pnpm gates"
+    "verify": "pnpm check && pnpm lint && pnpm format:check && pnpm test && pnpm gates",
+    "serve": "node dist/serve.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
