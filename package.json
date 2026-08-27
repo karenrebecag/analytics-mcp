@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Unified web-analytics MCP server \u2014 GA4, Cloudflare Web Analytics, Vercel Analytics and Google Search Console behind one normalized tool surface. StreamableHTTP for remote clients (Claude web), stdio for local ones.",
   "type": "module",
+  "packageManager": "pnpm@10.33.0",
   "license": "MIT",
   "bin": {
     "analytics-mcp": "./dist/index.js"
