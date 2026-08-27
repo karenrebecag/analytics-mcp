@@ -18,8 +18,8 @@ describe('registry', () => {
     setSourcesForTests(null);
   });
 
-  it('returns no adapters in F0', () => {
-    expect(allSources()).toEqual([]);
+  it('returns the four adapters', () => {
+    expect(allSources().map((s) => s.id)).toEqual(['ga4', 'cloudflare', 'vercel', 'gsc']);
   });
 
   it('lists valid ids when getSource misses', () => {
@@ -34,6 +34,6 @@ describe('registry', () => {
     expect(allSources()).toEqual([ga4]);
     expect(getSource('ga4')).toBe(ga4);
     setSourcesForTests(null);
-    expect(allSources()).toEqual([]);
+    expect(allSources().map((s) => s.id)).toEqual(['ga4', 'cloudflare', 'vercel', 'gsc']);
   });
 });

@@ -1,4 +1,8 @@
 import { SOURCE_IDS, type AnalyticsSource } from './types.js';
+import { createGa4Source } from './ga4.js';
+import { createCloudflareSource } from './cloudflare.js';
+import { createVercelSource } from './vercel.js';
+import { createGscSource } from './gsc.js';
 
 let injected: AnalyticsSource[] | null = null;
 
@@ -8,8 +12,7 @@ export function setSourcesForTests(list: AnalyticsSource[] | null): void {
 
 export function allSources(): AnalyticsSource[] {
   if (injected !== null) return injected;
-  // Adapters are registered in F1. F0 keeps the seam empty so tools still load.
-  return [];
+  return [createGa4Source(), createCloudflareSource(), createVercelSource(), createGscSource()];
 }
 
 export function getSource(id: string): AnalyticsSource {

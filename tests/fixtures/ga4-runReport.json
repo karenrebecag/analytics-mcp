@@ -1,0 +1,16 @@
+{
+  "dimensionHeaders": [{ "name": "date" }],
+  "metricHeaders": [
+    { "name": "screenPageViews", "type": "TYPE_INTEGER" },
+    { "name": "sessions", "type": "TYPE_INTEGER" },
+    { "name": "totalUsers", "type": "TYPE_INTEGER" }
+  ],
+  "rows": [
+    {
+      "dimensionValues": [{ "value": "20260820" }],
+      "metricValues": [{ "value": "120" }, { "value": "40" }, { "value": "30" }]
+    }
+  ],
+  "rowCount": 1,
+  "metadata": { "currencyCode": "USD", "timeZone": "America/Los_Angeles" }
+}

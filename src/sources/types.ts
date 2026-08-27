@@ -71,7 +71,7 @@ export interface AnalyticsSource<I extends SourceId = SourceId> {
   readonly id: I;
   readonly authKind: SourceAuthKind;
   isConfigured(env: Env): boolean;
-  schema(): Promise<SchemaEntry[]>;
-  query(req: QueryRequest, binding: BindingFor<I>): Promise<QueryResult>;
-  queryRaw(body: unknown, binding: BindingFor<I>): Promise<unknown>;
+  schema(binding?: BindingFor<I>): Promise<SchemaEntry[]>;
+  query(req: QueryRequest, binding: BindingFor<I>, timeoutMs?: number): Promise<QueryResult>;
+  queryRaw(body: unknown, binding: BindingFor<I>, timeoutMs?: number): Promise<unknown>;
 }

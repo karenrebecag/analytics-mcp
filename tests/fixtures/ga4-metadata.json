@@ -1,0 +1,27 @@
+{
+  "name": "properties/123456789/metadata",
+  "metrics": [
+    {
+      "apiName": "screenPageViews",
+      "uiName": "Views",
+      "description": "The number of app screens or web pages views."
+    },
+    {
+      "apiName": "sessions",
+      "uiName": "Sessions",
+      "description": "The number of sessions."
+    },
+    {
+      "apiName": "totalUsers",
+      "uiName": "Total users",
+      "description": "The number of distinct users."
+    }
+  ],
+  "dimensions": [
+    {
+      "apiName": "date",
+      "uiName": "Date",
+      "description": "The date of the event, YYYYMMDD."
+    }
+  ]
+}

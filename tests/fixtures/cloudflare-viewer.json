@@ -1,0 +1,24 @@
+{
+  "data": {
+    "viewer": {
+      "accounts": [
+        {
+          "rumPageloadEventsAdaptiveGroups": [
+            { "count": 108, "sum": { "visits": 83 } }
+          ],
+          "rumWebVitalsEventsAdaptiveGroups": [
+            {
+              "count": 34,
+              "quantiles": {
+                "cumulativeLayoutShiftP75": 0.011,
+                "interactionToNextPaintP75": 40000,
+                "largestContentfulPaintP75": 1764000
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "errors": null
+}

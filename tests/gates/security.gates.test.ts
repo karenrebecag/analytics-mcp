@@ -4,6 +4,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { spawnInitialized } from './helpers.js';
+import { writeCapture } from '../../scripts/probe.js';
+import { createCloudflareSource } from '../../dist/sources/cloudflare.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -100,3 +102,41 @@ function gitFiles(args: string[]): string[] {
   const out = execFileSync('git', args, { cwd: ROOT });
   return out.toString('utf8').split('\0').filter(Boolean);
 }
+
+describe('S-F1-1 writeCapture stays under scratch/', () => {
+  it('rejects traversal', () => {
+    expect(() => writeCapture('../x', { n: 1 })).toThrow(/bare file stem|escapes scratch/);
+  });
+});
+
+describe('S-F1-2 adapter errors truncate body and omit Authorization', () => {
+  it('keeps a 10KB upstream body and bearer header out of the thrown message', async () => {
+    const headerValue = 'gate-auth-header-value-1234567890';
+    const source = createCloudflareSource({
+      env: { CLOUDFLARE_API_TOKEN: headerValue, CLOUDFLARE_ACCOUNT_ID: 'acct_test' },
+      fetchImpl: async (_url, init) => {
+        const headers = init?.headers as Record<string, string> | undefined;
+        expect(headers?.Authorization).toBe(`Bearer ${headerValue}`);
+        return new Response('A'.repeat(10_000), { status: 502 });
+      },
+    });
+    await expect(
+      source.query(
+        {
+          siteId: 's',
+          range: { start: '2026-08-20', end: '2026-08-26' },
+          granularity: 'total',
+          metrics: ['pageviews'],
+        },
+        { zoneId: '0123456789abcdef0123456789abcdef' },
+      ),
+    ).rejects.toSatisfy((err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      return (
+        message.length <= 400 &&
+        !message.includes(headerValue) &&
+        message.startsWith('cloudflare 502:')
+      );
+    });
+  });
+});
