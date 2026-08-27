@@ -265,6 +265,22 @@ src/tools/validate-query.ts
 src/instructions.ts
   # Update: point the client at analytics://metrics and the interpret-query
   # prompt before deep analysis.
+  # ── Post-F2 implementation notes (binding, not optional) ──
+  # Coverage is now fixed by src/core/normalize.ts — knowledge.ts documents
+  # exactly these pairs, no others:
+  #   pageviews: ga4=screenPageViews / cloudflare=pageviews (+requests alias) /
+  #     vercel=pageviews;  sessions: ga4=sessions / cloudflare=visits;
+  #   visitors: ga4=totalUsers / cloudflare=visits+uniques / vercel=visitors;
+  #   clicks, impressions, ctr, position: gsc only.
+  # REQUIRED caveats (from F2 review — the honesty this layer exists for):
+  #   - cloudflare 'visits' serves BOTH sessions and visitors: it is an
+  #     approximation, and comparing cf.sessions vs cf.visitors is meaningless.
+  #   - cloudflare counts at the edge (includes some bots, immune to
+  #     adblockers); ga4 counts post-JS (loses adblocked/consent-denied
+  #     sessions). This asymmetry IS the expected discrepancy.
+  #   - gsc metrics are search-only: never comparable against pageviews.
+  # `expectations` lands as an optional block per site in sites.ts
+  # (zod .strict() extension) and in sites.example.json with fictitious values.
   CRITERIA: unit tests for explain-discrepancy (normal / abnormal / unknown
   pair -> honest "no criterion for this pair", never a made-up range) and
   validate-query; resource render test. Gate S-F25-1.
