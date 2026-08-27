@@ -7,7 +7,7 @@ import { createCloudflareSource } from '../src/sources/cloudflare.js';
 import { createGa4Source, fetchGa4Metadata } from '../src/sources/ga4.js';
 import { clearGoogleTokenCacheForTests } from '../src/sources/google-auth.js';
 import { createGscSource } from '../src/sources/gsc.js';
-import { createVercelSource } from '../src/sources/vercel.js';
+import { createVercelSource, vercelToken } from '../src/sources/vercel.js';
 import type { FetchLike } from '../src/sources/upstream.js';
 import type { QueryRequest } from '../src/sources/types.js';
 
@@ -234,5 +234,24 @@ describe('gsc', () => {
       ctr: 0.03,
       position: 8.2,
     });
+  });
+});
+
+describe('vercel token naming', () => {
+  it('accepts the Vercel-safe name and the reserved one, preferring the safe one', () => {
+    // Vercel rejects custom env vars starting with VERCEL_, so a deployment
+    // there can only set VC_API_TOKEN.
+    expect(vercelToken({ VC_API_TOKEN: 'safe' })).toBe('safe');
+    expect(vercelToken({ VERCEL_API_TOKEN: 'reserved' })).toBe('reserved');
+    expect(vercelToken({ VC_API_TOKEN: 'safe', VERCEL_API_TOKEN: 'reserved' })).toBe('safe');
+    expect(vercelToken({})).toBeUndefined();
+    expect(vercelToken({ VC_API_TOKEN: '   ' })).toBeUndefined();
+  });
+
+  it('reports configured from either name', () => {
+    const src = createVercelSource();
+    expect(src.isConfigured({ VC_API_TOKEN: 'x' })).toBe(true);
+    expect(src.isConfigured({ VERCEL_API_TOKEN: 'x' })).toBe(true);
+    expect(src.isConfigured({})).toBe(false);
   });
 });

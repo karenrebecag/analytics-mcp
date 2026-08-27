@@ -250,11 +250,13 @@ async function main(): Promise<void> {
     }
   }
 
-  const vercelConfigured = present('VERCEL_API_TOKEN');
+  const vercelConfigured = present('VC_API_TOKEN') || present('VERCEL_API_TOKEN');
   if (!vercelConfigured) {
-    process.stdout.write(`  ${dim('vercel skipped (VERCEL_API_TOKEN unset)')}\n`);
+    process.stdout.write(`  ${dim('vercel skipped (VC_API_TOKEN unset)')}\n`);
   } else {
-    const headers = { Authorization: `Bearer ${process.env.VERCEL_API_TOKEN}` };
+    const headers = {
+      Authorization: `Bearer ${process.env.VC_API_TOKEN || process.env.VERCEL_API_TOKEN}`,
+    };
     const team = vercelProject?.teamId;
     const qs = (path: string, extra: Record<string, string> = {}) => {
       const u = new URL(path, 'https://api.vercel.com');

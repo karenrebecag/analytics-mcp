@@ -157,7 +157,7 @@ optional — the server runs with one, or all four.
 | --- | --- | --- |
 | GA4 | `GA4_SERVICE_ACCOUNT_JSON` | Service account key (one line). Add its email as a **Viewer** on each GA4 property. |
 | Cloudflare | `CLOUDFLARE_API_TOKEN` | Token with *Account Analytics: Read*. Add `CLOUDFLARE_ACCOUNT_ID` to read Web Analytics (RUM); without it the adapter reads zone HTTP analytics instead. |
-| Vercel | `VERCEL_API_TOKEN` | Account settings → Tokens. |
+| Vercel | `VC_API_TOKEN` | Account settings → Tokens. Not `VERCEL_API_TOKEN`: Vercel reserves the `VERCEL_` prefix and rejects it as invalid on its own deployments. Both names are read elsewhere. |
 | Search Console | `GSC_SERVICE_ACCOUNT_JSON` | Service account added as a user in Search Console. Leave empty to reuse the GA4 key. |
 
 > **Cloudflare's two modes matter.** With an account id it reads the Web

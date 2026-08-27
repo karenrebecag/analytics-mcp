@@ -75,12 +75,22 @@ function byOf(granularity: QueryRequest['granularity']): string | undefined {
   return undefined;
 }
 
+/**
+ * Vercel reserves the `VERCEL_` prefix for its own system variables, so a
+ * deployment on Vercel cannot define VERCEL_API_TOKEN — it is rejected as
+ * invalid. VC_API_TOKEN is the name to use there; the reserved spelling stays
+ * accepted for deployments anywhere else, where it reads more naturally.
+ */
+export function vercelToken(env: Env): string | undefined {
+  return env.VC_API_TOKEN?.trim() || env.VERCEL_API_TOKEN?.trim() || undefined;
+}
+
 export function createVercelSource(opts?: VercelSourceOpts): AnalyticsSource<'vercel'> {
   return {
     id: 'vercel',
     authKind: 'http-api',
     isConfigured(env: Env): boolean {
-      return Boolean(env.VERCEL_API_TOKEN?.trim());
+      return Boolean(vercelToken(env));
     },
     async schema(): Promise<SchemaEntry[]> {
       return SCHEMA;
@@ -91,8 +101,8 @@ export function createVercelSource(opts?: VercelSourceOpts): AnalyticsSource<'ve
       timeoutMs?: number,
     ): Promise<QueryResult> {
       const env = envOf(opts);
-      const token = env.VERCEL_API_TOKEN;
-      if (!token) throw new Error('VERCEL_API_TOKEN is not set');
+      const token = vercelToken(env);
+      if (!token) throw new Error('VC_API_TOKEN (or VERCEL_API_TOKEN) is not set');
       const headers = { Authorization: `Bearer ${token}` };
       const ms = resolveTimeout(timeoutMs);
       const fetchImpl = fetchOf(opts);
@@ -158,8 +168,8 @@ export function createVercelSource(opts?: VercelSourceOpts): AnalyticsSource<'ve
       timeoutMs?: number,
     ): Promise<unknown> {
       const env = envOf(opts);
-      const token = env.VERCEL_API_TOKEN;
-      if (!token) throw new Error('VERCEL_API_TOKEN is not set');
+      const token = vercelToken(env);
+      if (!token) throw new Error('VC_API_TOKEN (or VERCEL_API_TOKEN) is not set');
       const rec =
         typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
       const path = typeof rec.path === 'string' ? rec.path : '/v1/query/web-analytics/visits/count';
