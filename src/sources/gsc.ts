@@ -50,6 +50,19 @@ function gscJson(env: Env): string {
   return readGoogleJson(env, 'GSC_SERVICE_ACCOUNT_JSON', 'GA4_SERVICE_ACCOUNT_JSON');
 }
 
+/**
+ * A domain property (sc-domain:) covers every subdomain, so without this a site
+ * bound to one hostname reports the whole domain and calls it the subdomain.
+ */
+function hostFilter(host?: string): Record<string, unknown> {
+  if (!host) return {};
+  return {
+    dimensionFilterGroups: [
+      { filters: [{ dimension: 'page', operator: 'contains', expression: host }] },
+    ],
+  };
+}
+
 export function createGscSource(opts?: GscSourceOpts): AnalyticsSource<'gsc'> {
   return {
     id: 'gsc',
@@ -78,6 +91,7 @@ export function createGscSource(opts?: GscSourceOpts): AnalyticsSource<'gsc'> {
           endDate: req.range.end,
           dimensions,
           rowLimit: 1000,
+          ...hostFilter(binding.host),
         }),
       ) as GscQueryResponse;
       const rows = (json.rows ?? []).map((row) => {

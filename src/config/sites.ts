@@ -1,14 +1,18 @@
 import { z } from 'zod';
 import type { Site } from '../sources/types.js';
 
-const ga4BindingSchema = z.object({ propertyId: z.string().min(1) }).strict();
+const ga4BindingSchema = z
+  .object({ propertyId: z.string().min(1), host: z.string().min(1).optional() })
+  .strict();
 const cloudflareBindingSchema = z
   .object({ zoneId: z.string().min(1), host: z.string().min(1).optional() })
   .strict();
 const vercelBindingSchema = z
   .object({ projectId: z.string().min(1), teamId: z.string().min(1).optional() })
   .strict();
-const gscBindingSchema = z.object({ siteUrl: z.string().min(1) }).strict();
+const gscBindingSchema = z
+  .object({ siteUrl: z.string().min(1), host: z.string().min(1).optional() })
+  .strict();
 
 const siteSourcesSchema = z
   .object({

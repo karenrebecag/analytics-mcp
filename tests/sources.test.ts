@@ -255,3 +255,63 @@ describe('vercel token naming', () => {
     expect(src.isConfigured({})).toBe(false);
   });
 });
+
+describe('host-scoped bindings', () => {
+  const sa = testServiceAccount();
+
+  /** Captures the request body the adapter sends to the Google API. */
+  function capturingFetch(sent: { body: Record<string, unknown> }): FetchLike {
+    return async (url, init) => {
+      if (url.includes('oauth2.googleapis.com/token')) {
+        return jsonResponse({ access_token: 'tok', expires_in: 3600 });
+      }
+      sent.body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+      return jsonResponse({ rows: [] });
+    };
+  }
+
+  it('GA4 filters by hostName when the binding names one', async () => {
+    const sent = { body: {} as Record<string, unknown> };
+    const src = createGa4Source({
+      env: { GA4_SERVICE_ACCOUNT_JSON: sa },
+      fetchImpl: capturingFetch(sent),
+    });
+    await src.query(
+      { ...REQ, metrics: ['screenPageViews'] },
+      {
+        propertyId: '1',
+        host: 'blog.example.com',
+      },
+    );
+    expect(JSON.stringify(sent.body.dimensionFilter)).toContain('hostName');
+    expect(JSON.stringify(sent.body.dimensionFilter)).toContain('blog.example.com');
+  });
+
+  it('GA4 sends no filter when the binding names no host', async () => {
+    const sent = { body: {} as Record<string, unknown> };
+    const src = createGa4Source({
+      env: { GA4_SERVICE_ACCOUNT_JSON: sa },
+      fetchImpl: capturingFetch(sent),
+    });
+    await src.query({ ...REQ, metrics: ['screenPageViews'] }, { propertyId: '1' });
+    expect(sent.body.dimensionFilter).toBeUndefined();
+  });
+
+  it('GSC scopes a domain property to one subdomain', async () => {
+    const sent = { body: {} as Record<string, unknown> };
+    const src = createGscSource({
+      env: { GSC_SERVICE_ACCOUNT_JSON: sa },
+      fetchImpl: capturingFetch(sent),
+    });
+    await src.query(
+      { ...REQ, metrics: ['clicks'] },
+      {
+        siteUrl: 'sc-domain:example.com',
+        host: 'blog.example.com',
+      },
+    );
+    const filters = JSON.stringify(sent.body.dimensionFilterGroups);
+    expect(filters).toContain('blog.example.com');
+    expect(filters).toContain('contains');
+  });
+});

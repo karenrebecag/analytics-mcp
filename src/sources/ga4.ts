@@ -31,6 +31,22 @@ interface Ga4Report {
   metadata?: { timeZone?: string };
 }
 
+/**
+ * A GA4 property normally receives from every subdomain at once, so without
+ * this a site bound to one hostname silently reports the whole estate.
+ */
+function hostFilter(host?: string): Record<string, unknown> {
+  if (!host) return {};
+  return {
+    dimensionFilter: {
+      filter: {
+        fieldName: 'hostName',
+        stringFilter: { matchType: 'EXACT', value: host },
+      },
+    },
+  };
+}
+
 function envOf(opts?: Ga4SourceOpts): Env {
   return opts?.env ?? process.env;
 }
@@ -82,6 +98,7 @@ export function createGa4Source(opts?: Ga4SourceOpts): AnalyticsSource<'ga4'> {
       const report = asRecord(
         'ga4',
         await runGa4(opts, binding, timeoutMs, {
+          ...hostFilter(binding.host),
           dateRanges: [{ startDate: req.range.start, endDate: req.range.end }],
           metrics: req.metrics.map((name) => ({ name })),
           dimensions: dimensions.map((name) => ({ name })),

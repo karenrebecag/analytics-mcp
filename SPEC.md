@@ -413,6 +413,25 @@ src/instructions.ts, src/server.ts, src/tools/index.ts
   is a crawler with sampling error, not analytics — a different architecture).
 ```
 
+### Phase F7 — host-scoped bindings
+
+```
+src/sources/types.ts, src/config/sites.ts
+  # ga4 and gsc bindings gain an optional `host`, matching cloudflare's.
+src/sources/ga4.ts
+  # dimensionFilter on hostName (EXACT) when the binding names a host. A GA4
+  # property receives from every subdomain at once, so without this a site
+  # bound to one hostname silently reports the whole estate.
+src/sources/gsc.ts
+  # dimensionFilterGroups: page contains <host>. A sc-domain: property covers
+  # every subdomain, so the same trap applies.
+  CRITERIA: request-shape tests proving the filter is sent when a host is
+  named and absent when it is not.
+  WHY IT MATTERS: without it, a per-subdomain site returns whole-domain numbers
+  wearing the subdomain's label — the precise failure this project exists to
+  prevent, and one it committed itself until this phase.
+```
+
 ---
 
 ## 3. Phase gates — `tests/gates/` (the tripwire)

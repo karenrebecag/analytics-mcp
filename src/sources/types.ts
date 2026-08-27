@@ -34,6 +34,8 @@ export interface SchemaEntry {
 
 export interface Ga4Binding {
   propertyId: string;
+  /** Restrict to one hostname. A GA4 property usually spans every subdomain. */
+  host?: string;
 }
 
 export interface CloudflareBinding {
@@ -48,6 +50,8 @@ export interface VercelBinding {
 
 export interface GscBinding {
   siteUrl: string;
+  /** Restrict to one hostname. A domain property covers every subdomain. */
+  host?: string;
 }
 
 export interface SiteSourceBindings {

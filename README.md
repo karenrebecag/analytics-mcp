@@ -187,6 +187,11 @@ identifiers. See `sites.example.json`:
 ]
 ```
 
+Each source accepts an optional `host` to scope it to one subdomain — a GA4
+property and a `sc-domain:` Search Console property both cover every subdomain
+at once, so without it a site named `blog.example.com` would report the whole
+estate under that label.
+
 A site needs only the sources you actually run. Optionally add an
 `expectations` block to record the normal gap between two trackers *for that
 site*, which overrides the generic criterion.
