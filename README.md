@@ -215,7 +215,7 @@ project. Beyond your source credentials you need:
 | `FRONTEND_URL` | Your sign-in page — see the contract below. |
 | `UPSTASH_REDIS_REST_URL` + `_TOKEN` | Auth state. **Required in production**: without it every token exchange fails closed. Vercel's Upstash integration injects `KV_REST_API_*`, which is also accepted. |
 | `ALLOWED_EMAIL_DOMAIN` | Optional. Restrict access to one email domain; empty means no restriction. |
-| `CLERK_SECRET_KEY` | Optional. Also accept Clerk session tokens as bearers. |
+| `CLERK_JWT_KEY` | Optional. Also accept Clerk session tokens as bearers. This is the **public** PEM (Clerk → API keys → Show JWT public key), so the server never holds a credential that can mint or revoke sessions. `CLERK_SECRET_KEY` works too, but grants far more than verification needs. |
 
 Then add `https://your-deployment/mcp` as a custom connector in Claude. The
 OAuth flow starts on its own — the `401` carries the `WWW-Authenticate` header

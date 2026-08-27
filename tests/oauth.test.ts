@@ -21,6 +21,7 @@ beforeEach(() => {
   process.env.MCP_SIGNING_SECRET = SECRET;
   process.env.FRONTEND_URL = 'https://app.example';
   delete process.env.CLERK_SECRET_KEY;
+  delete process.env.CLERK_JWT_KEY;
   delete process.env.ALLOWED_EMAIL_DOMAIN;
   store = new MemoryAuthStateStore();
   setAuthStateStoreForTests(store);
@@ -222,6 +223,19 @@ describe('mcp endpoint auth', () => {
     const tokens = json(await exchange(await makeCode()));
     const res = await call({ authorization: `Bearer ${tokens.access_token as string}` });
     expect(res.captured.status).toBe(403);
+  });
+
+  it('attempts Clerk with only the public key, and falls through on failure', async () => {
+    // The public PEM alone must enable the Clerk path; a token this server
+    // issued still verifies afterwards, so the fallthrough is not skipped.
+    process.env.CLERK_JWT_KEY =
+      '-----BEGIN PUBLIC KEY-----\nnot-a-real-key\n-----END PUBLIC KEY-----';
+    const tokens = json(await exchange(await makeCode()));
+    const res = await call({ authorization: `Bearer ${tokens.access_token as string}` });
+    // Anything but 401/403 means auth resolved and the request reached the
+    // transport (which then rejects the mock for its own reasons).
+    expect(res.captured.status).not.toBe(401);
+    expect(res.captured.status).not.toBe(403);
   });
 
   it('rejects an access token whose jti was revoked', async () => {

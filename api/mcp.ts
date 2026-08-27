@@ -30,16 +30,24 @@ function store(): AuthStateStore {
   return storeOverride ?? createAuthStateStore();
 }
 
-/** Verify a Clerk session token. Returns null when Clerk is not configured. */
+/**
+ * Verify a Clerk session token. Returns null when Clerk is not configured.
+ *
+ * CLERK_JWT_KEY (the public PEM) is enough on its own and is the recommended
+ * setup: verification runs networklessly against the public key, so this
+ * server never holds a credential that could mint or revoke sessions.
+ * CLERK_SECRET_KEY is accepted for the JWKS-over-network path instead.
+ */
 async function verifyClerk(token: string): Promise<string | null> {
-  const secretKey = process.env.CLERK_SECRET_KEY;
-  if (!secretKey) return null;
+  const jwtKey = process.env.CLERK_JWT_KEY?.trim() || undefined;
+  const secretKey = process.env.CLERK_SECRET_KEY?.trim() || undefined;
+  if (!jwtKey && !secretKey) return null;
   try {
     // Imported lazily so a deployment without Clerk never loads the package.
     const { verifyToken } = await import('@clerk/backend');
     const payload = (await verifyToken(token, {
       secretKey,
-      jwtKey: process.env.CLERK_JWT_KEY,
+      jwtKey,
     })) as Record<string, unknown>;
     const email = payload.email;
     return typeof email === 'string' ? email : ((payload.sub as string | undefined) ?? null);
