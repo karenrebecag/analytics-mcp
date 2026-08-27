@@ -3,19 +3,25 @@ import { INSTRUCTIONS } from './instructions.js';
 import { registerPrompts } from './prompts/index.js';
 import { registerResources } from './resources/index.js';
 import {
+  aiReferralsSchema,
+  explainCtrGapSchema,
   explainDiscrepancySchema,
   getSchemaSchema,
+  handleAiReferrals,
+  handleExplainCtrGap,
   handleExplainDiscrepancy,
   handleGetSchema,
   handleListSites,
   handleListSources,
   handleQuery,
   handleQueryRaw,
+  handleSeoOpportunities,
   handleValidateQuery,
   listSitesSchema,
   listSourcesSchema,
   queryRawSchema,
   querySchema,
+  seoOpportunitiesSchema,
   validateQuerySchema,
 } from './tools/index.js';
 
@@ -103,6 +109,39 @@ export function createServer(): McpServer {
       annotations: READ_ONLY,
     },
     (args) => handleValidateQuery(args),
+  );
+
+  server.registerTool(
+    'seo_opportunities',
+    {
+      description:
+        'Where the cheapest search wins are, ranked by estimated missed clicks: pages that rank but are not clicked, pages just outside the clickable positions, and pages losing ground. Compares against this site own click-through curve, never an industry benchmark.',
+      inputSchema: seoOpportunitiesSchema.shape,
+      annotations: READ_ONLY,
+    },
+    (args) => handleSeoOpportunities(args),
+  );
+
+  server.registerTool(
+    'explain_ctr_gap',
+    {
+      description:
+        'Is one page underperforming its search position? Deterministic verdict against this site own curve; says plainly when there is not enough data to judge.',
+      inputSchema: explainCtrGapSchema.shape,
+      annotations: READ_ONLY,
+    },
+    (args) => handleExplainCtrGap(args),
+  );
+
+  server.registerTool(
+    'ai_referrals',
+    {
+      description:
+        'Traffic arriving from AI assistants (ChatGPT, Perplexity, Claude, Gemini, Copilot), by engine. Measures arrivals, not citations — no API reports whether an assistant mentioned you.',
+      inputSchema: aiReferralsSchema.shape,
+      annotations: READ_ONLY,
+    },
+    (args) => handleAiReferrals(args),
   );
 
   registerResources(server);

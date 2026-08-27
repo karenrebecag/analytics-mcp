@@ -352,6 +352,67 @@ README.md
   (grep gate S-F0-3 also covers docs).
 ```
 
+### Phase F6 — SEO / GEO analysis layer (after F5)
+
+Not a new source: an analysis layer over the sources F1 already connected.
+Same rule as F2.5 — the server computes deterministic verdicts from codified
+criterion and never reasons about what they mean.
+
+```
+src/seo/ctr-curve.ts
+  # The criterion, self-calibrating. Published CTR-by-position curves vary by
+  # industry and SERP features, so importing one would be a fabricated number
+  # wearing a data costume. Instead the curve is computed from the site's OWN
+  # Search Console rows.
+  # - buildCtrCurve(rows) -> per integer position bucket (1..20, then 20+):
+  #   weighted ctr = sum(clicks)/sum(impressions). NEVER the mean of per-row
+  #   ctr values — ctr is a rate, and averaging rates misweights small pages.
+  # - expectedCtr(curve, position) -> { ctr, impressions } or undefined when
+  #   the bucket holds too few impressions to judge (MIN_BUCKET_IMPRESSIONS).
+  #   Widen to neighbouring buckets once, then give up. "Not enough of your own
+  #   data to say" is a valid answer; inventing a benchmark is not.
+src/seo/opportunities.ts
+  # Pure functions over GSC page rows + the curve. Every result is ranked by
+  # ESTIMATED MISSED CLICKS, a number a non-technical reader can act on, not by
+  # an abstract score.
+  # - ctrGaps(rows, curve): pages whose ctr falls short of what this site earns
+  #   at that position. missedClicks = impressions * (expectedCtr - actualCtr),
+  #   kept only when positive and above a floor.
+  # - strikingDistance(rows): positions 5..15 with real impressions — cheaper to
+  #   push than to write new content. Ranked by impressions at stake.
+  # - decayed(current, previous): pages that lost position or clicks between two
+  #   periods. Requires both; absent previous data yields an empty list, never a
+  #   guess.
+src/seo/ai-sources.ts
+  # AI_ASSISTANT_SOURCES: match table for assistant referrers (chatgpt, openai,
+  # perplexity, claude/anthropic, gemini, copilot, ...). Codified criterion,
+  # pure data, extendable.
+  # matchAssistant(source) -> canonical engine name | undefined.
+src/tools/seo-opportunities.ts
+  # { site, range, previousRange?, limit?, kinds? } -> ranked opportunities per
+  # kind, each with the estimated missed clicks and a plain-language reason.
+  # Sources GSC page rows through the gsc adapter (granularity 'total',
+  # dimensions ['page']) — no raw calls, no new credentials.
+src/tools/explain-ctr-gap.ts
+  # { site, range, page } -> deterministic verdict for one page against the
+  # site's own curve, in the shape of explain_discrepancy: says plainly when the
+  # curve has too little data rather than inventing an expectation.
+src/tools/ai-referrals.ts
+  # { site, range, granularity? } -> sessions arriving FROM AI assistants, by
+  # engine. Output states, every time, that this measures arrivals and NOT
+  # citations or visibility: no API reports whether an assistant cited you, and
+  # Search Console folds AI Overview impressions into ordinary impressions.
+src/instructions.ts, src/server.ts, src/tools/index.ts
+  # Register the three tools; point the client at them for SEO questions.
+  CRITERIA: unit tests for the curve (weighted not averaged; thin bucket ->
+  undefined), for each opportunity kind, and for the assistant matcher.
+  Gate S-F6-1.
+  EXPLICITLY OUT: a "GEO visibility score" (it would be fabricated); keyword
+  volume or rank tracking (needs a paid third-party source and breaks the
+  your-credentials-only model); prompting AI engines to check citations (that
+  is a crawler with sampling error, not analytics — a different architecture).
+```
+
 ---
 
 ## 3. Phase gates — `tests/gates/` (the tripwire)
@@ -377,6 +438,7 @@ Included in `pnpm verify`. Budget: ~15–20 tests total at F5 — no padding.
 | S-F3-3 | F3 | A refresh token presented as Bearer to /mcp → 401 |
 | S-F3-4 | F3 | Auth-state store unavailable → token exchange fails (fail-closed), never issues |
 | S-F3-5 | F3 | /mcp without Bearer → 401 + `WWW-Authenticate: Bearer` |
+| S-F6-1 | F6 | The CTR curve is derived only from the caller's own rows: `src/seo/` reads no env, no config and no hardcoded benchmark table; a thin bucket returns undefined instead of a number |
 | S-F4-1 | F4 | stdio session: every stdout line parses as JSON-RPC (logs never leak into the MCP channel) |
 
 ### Performance suite — `tests/gates/perf.gates.test.ts`

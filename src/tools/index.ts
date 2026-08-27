@@ -5,3 +5,6 @@ export { querySchema, handleQuery } from './query.js';
 export { queryRawSchema, handleQueryRaw } from './query-raw.js';
 export { explainDiscrepancySchema, handleExplainDiscrepancy } from './explain-discrepancy.js';
 export { validateQuerySchema, handleValidateQuery } from './validate-query.js';
+export { seoOpportunitiesSchema, handleSeoOpportunities } from './seo-opportunities.js';
+export { explainCtrGapSchema, handleExplainCtrGap } from './explain-ctr-gap.js';
+export { aiReferralsSchema, handleAiReferrals } from './ai-referrals.js';

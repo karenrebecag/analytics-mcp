@@ -198,3 +198,25 @@ describe('S-F25-1 semantic layer carries no site-specific values', () => {
     }
   });
 });
+
+describe('S-F6-1 the SEO layer judges only against the caller own data', () => {
+  it('reads no env or config, and carries no benchmark table', () => {
+    const files = ['ctr-curve.ts', 'opportunities.ts', 'ai-sources.ts'].map((f) =>
+      fs.readFileSync(path.join(ROOT, 'src/seo', f), 'utf8'),
+    );
+    for (const raw of files) {
+      const code = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+      expect(code).not.toMatch(/process\.env/);
+      expect(code).not.toMatch(/loadSites|SITES_CONFIG|getSite/);
+      // An imported CTR-by-position table would look like a literal array of
+      // rates. The curve must be computed, never declared.
+      expect(code).not.toMatch(/0\.\d+\s*,\s*0\.\d+\s*,\s*0\.\d+/);
+    }
+  });
+
+  it('returns no expectation when the caller data is too thin', async () => {
+    const { buildCtrCurve, expectedCtr } = await import('../../dist/seo/ctr-curve.js');
+    const thin = buildCtrCurve([{ page: '/a', clicks: 3, impressions: 60, position: 4 }]);
+    expect(expectedCtr(thin, 4)).toBeUndefined();
+  });
+});

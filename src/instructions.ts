@@ -6,4 +6,8 @@ export const INSTRUCTIONS =
   'prompt when explaining results to a non-technical reader, and the site-report prompt for a full ' +
   'traffic report. Discrepancies between independent trackers are expected: run explain_discrepancy ' +
   'before calling one a problem. validate_query is advisory and flags silently truncated ranges or ' +
-  'metrics a site cannot answer.';
+  'metrics a site cannot answer. ' +
+  'For search questions use seo_opportunities (ranked by missed clicks) and ' +
+  'explain_ctr_gap; both compare against the site own click-through curve rather ' +
+  'than an industry benchmark. ai_referrals reports traffic arriving from AI ' +
+  'assistants — arrivals, never citations.';
