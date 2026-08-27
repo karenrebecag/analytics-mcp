@@ -1,5 +1,10 @@
 # analytics-mcp
 
+[![CI](https://github.com/karenrebecag/analytics-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/karenrebecag/analytics-mcp/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](package.json)
+[![MCP](https://img.shields.io/badge/MCP-StreamableHTTP%20%2B%20stdio-8A2BE2)](https://modelcontextprotocol.io)
+
 A [Model Context Protocol](https://modelcontextprotocol.io) server that puts
 **GA4, Cloudflare Web Analytics, Vercel Analytics and Google Search Console**
 behind one normalized tool surface — and, more importantly, teaches the model
@@ -57,13 +62,18 @@ metric name. The person reading the answer should not need to know what GA4 is.
                                     │
                     ┌───────────────┼───────────────┐
                     ▼               ▼               ▼
-              tools + prompts   semantics/     sources/registry
-                + resources     knowledge.ts         │
-                                (the criterion)      │
-                                         ┌───────────┼───────────┐
-                                         ▼     ▼     ▼           ▼
-                                       GA4   CF    Vercel      GSC
+              tools + prompts   semantics/  +  seo/      sources/registry
+                + resources     knowledge.ts   ctr-curve       │
+                                    (the criterion)            │
+                                         ┌───────────┬─────────┼─────────┐
+                                         ▼           ▼         ▼         ▼
+                                       GA4      Cloudflare  Vercel     GSC
 ```
+
+`seo/` and `semantics/` are analysis over the same four sources, not sources of
+their own — which is why adding SEO needed no new credentials and no change to
+the adapter contract. A fifth source (a third-party SEO API, say) would be one
+new file in `sources/` plus one line in the registry.
 
 Two rules hold this together, and the test suite enforces both:
 
@@ -93,6 +103,9 @@ service is the wrong trade.
 | `query_raw` | Escape hatch: a native payload to one source |
 | `explain_discrepancy` | Is this gap between two trackers normal? Deterministic |
 | `validate_query` | Dry-run: unsupported metrics, truncated ranges, bad comparisons |
+| `seo_opportunities` | Cheapest search wins, ranked by estimated missed clicks |
+| `explain_ctr_gap` | Is one page underperforming its position? Deterministic |
+| `ai_referrals` | Traffic arriving from AI assistants, by engine |
 
 Every tool is read-only. There are no write tools and none are planned.
 
@@ -100,6 +113,36 @@ Every tool is read-only. There are no write tools and none are planned.
 `clicks`, `impressions`, `ctr`, `position` (Google Search). Each maps to its
 native name per source; a source that cannot answer one returns a warning in
 its slot rather than failing the whole query.
+
+### Search and AI visibility
+
+Two things usually sold together, kept apart here because only one of them can
+honestly be measured.
+
+**Search.** The click-through curve — how much a position normally earns — is
+computed from *your own* Search Console rows, never imported. Published
+CTR-by-position curves swing wildly by industry, language and which SERP
+features sit above the results; borrowing one would confidently call your pages
+broken for missing a benchmark they were never subject to. When your own data
+is too thin around a position, the tools say so instead of inventing an
+expectation.
+
+Findings are ranked by **estimated missed clicks**, not by a score out of 100,
+because a reader can decide on the first and not the second:
+
+```
+position 6.1 · 16,819 impressions · 6 clicks · CTR 0.04%
+your other pages at that position earn 0.9% (measured over 33,970 impressions)
+→ underperforming, about 146 clicks missed
+  "The ranking is fine; the invitation is not."
+```
+
+**AI visibility.** `ai_referrals` reports sessions that arrived *from* an AI
+assistant, broken down by engine. It states in every response that arrivals are
+**not** citations: no API reports whether an assistant mentioned you, plenty of
+people read an answer without clicking, and Search Console folds AI Overview
+appearances into ordinary impressions. There is deliberately no "GEO visibility
+score" here — it would be a fabricated number wearing a data costume.
 
 ### Resources and prompts
 
@@ -270,6 +313,12 @@ entry in `errors`; the rest of the answer still arrives. A missing source means
 **Row caps truncate silently upstream.** Cloudflare returns at most 40 daily
 rows, Search Console 1000, GA4 10000. `validate_query` warns before you read
 numbers that quietly left data out.
+
+**Criterion is self-calibrating.** Both the cross-source discrepancy ranges and
+the CTR curve are derived from your data or from documented mechanism, never
+from an imported benchmark. Where no criterion exists, the tools return "no
+criterion recorded" rather than a plausible guess — a wrong number that sounds
+right is worse than an honest gap.
 
 **Adapters are typed against real captures**, never against documentation.
 `pnpm probe` first, then the adapter. Docs drift; captured responses do not.
