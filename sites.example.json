@@ -9,7 +9,16 @@
         "host": "www.example.com"
       },
       "gsc": { "siteUrl": "sc-domain:example.com" }
-    }
+    },
+    "expectations": [
+      {
+        "metric": "pageviews",
+        "sourceA": "ga4",
+        "sourceB": "cloudflare",
+        "maxRatio": 0.2,
+        "reason": "Example only: this site measured its own normal gap at 20%."
+      }
+    ]
   },
   {
     "id": "app",

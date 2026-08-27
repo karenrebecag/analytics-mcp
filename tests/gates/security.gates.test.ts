@@ -165,3 +165,36 @@ describe('S-F1-2 adapter errors truncate body and omit Authorization', () => {
     });
   });
 });
+
+describe('S-F25-1 semantic layer carries no site-specific values', () => {
+  it('keeps knowledge.ts free of site identifiers and per-site numbers', () => {
+    const raw = fs.readFileSync(path.join(ROOT, 'src/semantics/knowledge.ts'), 'utf8');
+    // Comments legitimately name the config that overrides this module; the
+    // invariant is that no CODE reads it. Strip comments, then assert.
+    const source = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    expect(source).not.toMatch(/process\.env/);
+    expect(source).not.toMatch(/loadSites|SITES_CONFIG|getSite/);
+    // Identifier shapes that would mean a real property, zone or project leaked in.
+    expect(source).not.toMatch(/\bproperties\/\d+/);
+    expect(source).not.toMatch(/\bprj_[A-Za-z0-9]{8,}/);
+    expect(source).not.toMatch(/\b[0-9a-f]{32}\b/);
+    expect(source).not.toMatch(/sc-domain:/);
+  });
+
+  it('reaches per-site expectations only through runtime config', async () => {
+    const { client } = await spawnInitialized({ SITES_CONFIG: EXAMPLE_SITES });
+    try {
+      const generic = JSON.stringify(
+        await client.request('resources/read', { uri: 'analytics://metrics' }),
+      );
+      // The generic document must not carry the example site's measured gap.
+      expect(generic).not.toContain('marketing-site');
+      const scoped = JSON.stringify(
+        await client.request('resources/read', { uri: 'analytics://metrics/marketing-site' }),
+      );
+      expect(scoped).toContain('siteExpectations');
+    } finally {
+      await client.kill();
+    }
+  });
+});

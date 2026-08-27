@@ -59,10 +59,19 @@ export interface SiteSourceBindings {
 
 export type BindingFor<I extends SourceId> = SiteSourceBindings[I];
 
+export interface SiteExpectation {
+  metric: string;
+  sourceA: string;
+  sourceB: string;
+  maxRatio: number;
+  reason?: string;
+}
+
 export interface Site {
   id: string;
   name: string;
   sources: { [K in SourceId]?: SiteSourceBindings[K] };
+  expectations?: SiteExpectation[];
 }
 
 export type Env = Record<string, string | undefined>;

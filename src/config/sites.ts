@@ -19,11 +19,25 @@ const siteSourcesSchema = z
   })
   .strict();
 
+// Per-site "normal gap" overrides. The generic source-pair criterion lives in
+// semantics/knowledge.ts; anything specific to one site is runtime config, so
+// no site's numbers ever reach the open-source tree.
+const expectationSchema = z
+  .object({
+    metric: z.string().min(1),
+    sourceA: z.string().min(1),
+    sourceB: z.string().min(1),
+    maxRatio: z.number().min(0).max(1),
+    reason: z.string().min(1).optional(),
+  })
+  .strict();
+
 const siteSchema = z
   .object({
     id: z.string().min(1),
     name: z.string().min(1),
     sources: siteSourcesSchema,
+    expectations: z.array(expectationSchema).optional(),
   })
   .strict();
 

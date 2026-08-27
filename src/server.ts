@@ -1,16 +1,22 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { INSTRUCTIONS } from './instructions.js';
+import { registerPrompts } from './prompts/index.js';
+import { registerResources } from './resources/index.js';
 import {
+  explainDiscrepancySchema,
   getSchemaSchema,
+  handleExplainDiscrepancy,
   handleGetSchema,
   handleListSites,
   handleListSources,
   handleQuery,
   handleQueryRaw,
+  handleValidateQuery,
   listSitesSchema,
   listSourcesSchema,
   queryRawSchema,
   querySchema,
+  validateQuerySchema,
 } from './tools/index.js';
 
 const READ_ONLY = { readOnlyHint: true, openWorldHint: true } as const;
@@ -18,7 +24,10 @@ const READ_ONLY = { readOnlyHint: true, openWorldHint: true } as const;
 export function createServer(): McpServer {
   const server = new McpServer(
     { name: 'analytics-mcp', version: '0.1.0' },
-    { capabilities: { tools: {} }, instructions: INSTRUCTIONS },
+    {
+      capabilities: { tools: {}, resources: {}, prompts: {} },
+      instructions: INSTRUCTIONS,
+    },
   );
 
   server.registerTool(
@@ -73,6 +82,31 @@ export function createServer(): McpServer {
     },
     (args) => handleQueryRaw(args),
   );
+
+  server.registerTool(
+    'explain_discrepancy',
+    {
+      description:
+        'Is the gap between two sources for one metric normal? Deterministic verdict from codified criterion; says so plainly when no criterion exists rather than guessing.',
+      inputSchema: explainDiscrepancySchema.shape,
+      annotations: READ_ONLY,
+    },
+    (args) => handleExplainDiscrepancy(args),
+  );
+
+  server.registerTool(
+    'validate_query',
+    {
+      description:
+        'Dry-run a query: reports unsupported metrics, silently truncated ranges and misleading comparisons. Advisory — never blocks query.',
+      inputSchema: validateQuerySchema.shape,
+      annotations: READ_ONLY,
+    },
+    (args) => handleValidateQuery(args),
+  );
+
+  registerResources(server);
+  registerPrompts(server);
 
   return server;
 }

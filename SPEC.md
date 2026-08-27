@@ -275,9 +275,14 @@ src/instructions.ts
   # REQUIRED caveats (from F2 review — the honesty this layer exists for):
   #   - cloudflare 'visits' serves BOTH sessions and visitors: it is an
   #     approximation, and comparing cf.sessions vs cf.visitors is meaningless.
-  #   - cloudflare counts at the edge (includes some bots, immune to
-  #     adblockers); ga4 counts post-JS (loses adblocked/consent-denied
-  #     sessions). This asymmetry IS the expected discrepancy.
+  #   - CORRECTED at F2.5 implementation: cloudflare has TWO modes with
+  #     opposite properties, selected at runtime by CLOUDFLARE_ACCOUNT_ID.
+  #     RUM mode (account id set) reads rumPageloadEventsAdaptiveGroups — a JS
+  #     beacon, so it undercounts like ga4. Edge mode (no account id) reads
+  #     httpRequests1dGroups — raw edge requests including bots and assets, so
+  #     it overcounts several times over. The expected ga4↔cloudflare gap
+  #     therefore depends on the live mode; EXPECTED_DISCREPANCY carries an
+  #     `edge` variant per pair rather than one blended number.
   #   - gsc metrics are search-only: never comparable against pageviews.
   # `expectations` lands as an optional block per site in sites.ts
   # (zod .strict() extension) and in sites.example.json with fictitious values.
