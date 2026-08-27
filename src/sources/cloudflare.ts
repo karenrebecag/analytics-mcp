@@ -77,6 +77,22 @@ function nextUtcDay(isoDate: string): string {
   return new Date(ms + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
+function pinGraphqlBinding(body: unknown, binding: BindingFor<'cloudflare'>, env: Env): unknown {
+  if (typeof body !== 'object' || body === null) return body;
+  const rec = body as { query?: unknown; variables?: unknown };
+  if (typeof rec.query === 'string' && /\b(mutation|subscription)\b/i.test(rec.query)) {
+    throw new Error('cloudflare queryRaw only accepts GraphQL queries');
+  }
+  const variables =
+    typeof rec.variables === 'object' && rec.variables !== null
+      ? { ...(rec.variables as Record<string, unknown>) }
+      : {};
+  variables.zoneTag = binding.zoneId;
+  const accountTag = env.CLOUDFLARE_ACCOUNT_ID?.trim();
+  if (accountTag) variables.accountTag = accountTag;
+  return { ...rec, variables };
+}
+
 function hostBits(host?: string): { decl: string; filter: string; vars: Record<string, unknown> } {
   if (!host) return { decl: '', filter: '', vars: {} };
   return { decl: ', $host: String!', filter: ', requestHost: $host', vars: { host } };
@@ -106,10 +122,10 @@ export function createCloudflareSource(opts?: CloudflareSourceOpts): AnalyticsSo
     },
     async queryRaw(
       body: unknown,
-      _binding: BindingFor<'cloudflare'>,
+      binding: BindingFor<'cloudflare'>,
       timeoutMs?: number,
     ): Promise<unknown> {
-      return graphql(opts, body, timeoutMs);
+      return graphql(opts, pinGraphqlBinding(body, binding, envOf(opts)), timeoutMs);
     },
   };
 }

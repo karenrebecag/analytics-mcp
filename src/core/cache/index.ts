@@ -14,3 +14,17 @@ export function createCacheStore(
   if (url && token) return createUpstashCache({ url, token });
   return createMemoryCache();
 }
+
+let injected: CacheStore | null = null;
+let singleton: CacheStore | null = null;
+
+export function getCacheStore(env: Record<string, string | undefined> = process.env): CacheStore {
+  if (injected) return injected;
+  if (!singleton) singleton = createCacheStore(env);
+  return singleton;
+}
+
+export function setCacheStoreForTests(store: CacheStore | null): void {
+  injected = store;
+  if (store === null) singleton = null;
+}

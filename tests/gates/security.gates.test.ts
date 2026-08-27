@@ -103,6 +103,31 @@ function gitFiles(args: string[]): string[] {
   return out.toString('utf8').split('\0').filter(Boolean);
 }
 
+describe('S-F2-1 query_raw source allowlist', () => {
+  it('rejects a source id outside SOURCE_IDS and lists valid ids', async () => {
+    const { client } = await spawnInitialized({ SITES_CONFIG: EXAMPLE_SITES });
+    try {
+      let blob: string;
+      try {
+        blob = JSON.stringify(
+          await client.request('tools/call', {
+            name: 'query_raw',
+            arguments: { source: 'not-a-source', site: 'marketing-site', body: {} },
+          }),
+        );
+      } catch (err) {
+        blob = err instanceof Error ? err.message : String(err);
+      }
+      expect(blob).toMatch(/ga4/);
+      expect(blob).toMatch(/cloudflare/);
+      expect(blob).toMatch(/vercel/);
+      expect(blob).toMatch(/gsc/);
+    } finally {
+      await client.kill();
+    }
+  });
+});
+
 describe('S-F1-1 writeCapture stays under scratch/', () => {
   it('rejects traversal', () => {
     expect(() => writeCapture('../x', { n: 1 })).toThrow(/bare file stem|escapes scratch/);

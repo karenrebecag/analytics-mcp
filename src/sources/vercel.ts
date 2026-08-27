@@ -49,12 +49,22 @@ function url(path: string, binding: BindingFor<'vercel'>, extra: Record<string, 
   if (u.protocol !== 'https:' || u.hostname !== 'api.vercel.com') {
     throw new Error('vercel path escaped api.vercel.com');
   }
-  if (!u.pathname.startsWith('/v1/query/web-analytics/')) {
+  let pathname = u.pathname;
+  try {
+    pathname = decodeURIComponent(pathname);
+  } catch {
     throw new Error('vercel path must be a web-analytics endpoint');
+  }
+  if (pathname.includes('..') || !pathname.startsWith('/v1/query/web-analytics/')) {
+    throw new Error('vercel path must be a web-analytics endpoint');
+  }
+  for (const [k, v] of Object.entries(extra)) {
+    if (k === 'projectId' || k === 'teamId') continue;
+    u.searchParams.set(k, v);
   }
   u.searchParams.set('projectId', binding.projectId);
   if (binding.teamId) u.searchParams.set('teamId', binding.teamId);
-  for (const [k, v] of Object.entries(extra)) u.searchParams.set(k, v);
+  else u.searchParams.delete('teamId');
   return u.toString();
 }
 

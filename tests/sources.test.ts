@@ -172,6 +172,29 @@ describe('vercel', () => {
     expect(result.rows[0]).toMatchObject({ pageviews: 220, visitors: 180 });
   });
 
+  it('queryRaw binding projectId wins over caller query overrides', async () => {
+    const seen: string[] = [];
+    const src = createVercelSource({
+      env: { VERCEL_API_TOKEN: 'vercel-token' },
+      fetchImpl: async (url) => {
+        seen.push(url);
+        return jsonResponse(fixture('vercel-visits-count.json'));
+      },
+    });
+    await src.queryRaw(
+      {
+        path: '/v1/query/web-analytics/visits/count',
+        query: { projectId: 'prj_other_project', teamId: 'team_other' },
+      },
+      binding,
+    );
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toContain('projectId=prj_xxxxxxxxxxxxxxxxxxxx');
+    expect(seen[0]).not.toContain('prj_other_project');
+    expect(seen[0]).toContain('teamId=team_xxxxxxxxxxxxxxxxxxxxxxxx');
+    expect(seen[0]).not.toContain('team_other');
+  });
+
   it('queryRaw refuses absolute and protocol-relative paths before fetch', async () => {
     let called = 0;
     const src = createVercelSource({
@@ -181,7 +204,12 @@ describe('vercel', () => {
         return jsonResponse({});
       },
     });
-    for (const path of ['https://evil.example/steal', '//evil.example/steal', '/v9/projects']) {
+    for (const path of [
+      'https://evil.example/steal',
+      '//evil.example/steal',
+      '/v9/projects',
+      '/v1/query/web-analytics/%2e%2e/foo',
+    ]) {
       await expect(src.queryRaw({ path }, binding)).rejects.toThrow(/vercel path/);
     }
     expect(called).toBe(0);
