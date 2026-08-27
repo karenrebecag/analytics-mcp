@@ -1,0 +1,21 @@
+[
+  {
+    "id": "marketing-site",
+    "name": "Marketing website",
+    "sources": {
+      "ga4": { "propertyId": "123456789" },
+      "cloudflare": {
+        "zoneId": "0123456789abcdef0123456789abcdef",
+        "host": "www.example.com"
+      },
+      "gsc": { "siteUrl": "sc-domain:example.com" }
+    }
+  },
+  {
+    "id": "app",
+    "name": "Product app",
+    "sources": {
+      "vercel": { "projectId": "prj_xxxxxxxxxxxxxxxxxxxx" }
+    }
+  }
+]

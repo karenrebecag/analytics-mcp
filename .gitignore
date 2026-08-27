@@ -1,0 +1,16 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+
+# Credentials and org-specific config — NEVER commit. The open-source repo
+# ships sites.example.json; the real mapping lives only in env / this file.
+.env
+.env.*
+sites.config.json
+
+# Probe captures may contain live analytics data from a real tenant
+scratch/
+
+# Private working notes — never committed
+PRIVATE-NOTES.md
