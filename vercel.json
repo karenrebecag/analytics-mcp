@@ -1,0 +1,27 @@
+{
+  "framework": null,
+  "buildCommand": "",
+  "installCommand": "pnpm install",
+  "functions": {
+    "api/mcp.ts": { "maxDuration": 30 },
+    "api/register.ts": { "maxDuration": 10 },
+    "api/authorize.ts": { "maxDuration": 10 },
+    "api/token.ts": { "maxDuration": 10 },
+    "api/revoke.ts": { "maxDuration": 10 }
+  },
+  "rewrites": [
+    { "source": "/mcp", "destination": "/api/mcp" },
+    { "source": "/register", "destination": "/api/register" },
+    { "source": "/authorize", "destination": "/api/authorize" },
+    { "source": "/token", "destination": "/api/token" },
+    { "source": "/revoke", "destination": "/api/revoke" },
+    {
+      "source": "/.well-known/oauth-authorization-server",
+      "destination": "/api/well-known/oauth-authorization-server"
+    },
+    {
+      "source": "/.well-known/oauth-protected-resource/:path*",
+      "destination": "/api/well-known/oauth-protected-resource/:path*"
+    }
+  ]
+}
