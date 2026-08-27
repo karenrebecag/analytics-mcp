@@ -7,6 +7,7 @@ import mcpHandler, { setMcpAuthStoreForTests } from '../api/mcp.js';
 import {
   AuthStateUnavailableError,
   MemoryAuthStateStore,
+  RedisAuthStateStore,
   type AuthStateStore,
 } from '../api/_shared/auth-state.js';
 import { issueClientId } from '../api/_shared/client-registry.js';
@@ -246,5 +247,29 @@ describe('mcp endpoint auth', () => {
     await store.revokeJti(decoded.jti, 60);
     const res = await call({ authorization: `Bearer ${tokens.access_token as string}` });
     expect(res.captured.status).toBe(401);
+  });
+});
+
+describe('auth-state key namespacing', () => {
+  it('keeps two servers sharing one Redis from revoking each other users', async () => {
+    const calls: string[][] = [];
+    const fakeFetch = async (_url: string, init: { body: string }) => {
+      calls.push(JSON.parse(init.body) as string[]);
+      return { ok: true, status: 200, json: async () => ({ result: null }) } as Response;
+    };
+    const original = globalThis.fetch;
+    globalThis.fetch = fakeFetch as unknown as typeof fetch;
+    try {
+      const a = new RedisAuthStateStore('https://redis.example', 't', 'analytics-mcp');
+      const b = new RedisAuthStateStore('https://redis.example', 't', 'uikit-mcp');
+      await a.isSubjectRevoked('user_1');
+      await b.isSubjectRevoked('user_1');
+    } finally {
+      globalThis.fetch = original;
+    }
+    // Same user, same Redis, different keys.
+    expect(calls[0][1]).toBe('analytics-mcp:revoked:sub:user_1');
+    expect(calls[1][1]).toBe('uikit-mcp:revoked:sub:user_1');
+    expect(calls[0][1]).not.toBe(calls[1][1]);
   });
 });

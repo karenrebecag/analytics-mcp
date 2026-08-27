@@ -7,6 +7,11 @@
  * Fail-closed: if the store is unavailable, callers must reject the request
  * (never skip the check). A store that cannot prove a code is unused must not
  * be read as proof that it is.
+ *
+ * Keys are namespaced by AUTH_STATE_PREFIX. Two MCP servers sharing one Redis
+ * would otherwise share subject revocation — and since the subject is the
+ * identity provider's user id, revoking someone on one server would log them
+ * out of the other.
  */
 
 export class AuthStateUnavailableError extends Error {
@@ -122,6 +127,7 @@ export class RedisAuthStateStore implements AuthStateStore {
   constructor(
     private baseUrl: string,
     private token: string,
+    private prefix: string = 'mcp',
   ) {}
 
   private async cmd(args: string[]): Promise<unknown> {
@@ -144,28 +150,42 @@ export class RedisAuthStateStore implements AuthStateStore {
 
   async consumeCode(jti: string, ttlSec: number): Promise<boolean> {
     // SET key 1 NX EX ttl → "OK" if set, null if exists
-    const r = await this.cmd(['SET', `mcp:code:${jti}`, '1', 'NX', 'EX', String(ttlSec)]);
+    const r = await this.cmd([
+      'SET',
+      `${this.prefix}:code:${jti}`,
+      '1',
+      'NX',
+      'EX',
+      String(ttlSec),
+    ]);
     return r === 'OK';
   }
 
   async consumeRefresh(jti: string, ttlSec: number): Promise<boolean> {
-    const r = await this.cmd(['SET', `mcp:refresh:${jti}`, '1', 'NX', 'EX', String(ttlSec)]);
+    const r = await this.cmd([
+      'SET',
+      `${this.prefix}:refresh:${jti}`,
+      '1',
+      'NX',
+      'EX',
+      String(ttlSec),
+    ]);
     return r === 'OK';
   }
 
   async revokeJti(jti: string, ttlSec: number): Promise<void> {
-    await this.cmd(['SET', `mcp:revoked:jti:${jti}`, '1', 'EX', String(ttlSec)]);
+    await this.cmd(['SET', `${this.prefix}:revoked:jti:${jti}`, '1', 'EX', String(ttlSec)]);
   }
 
   async isJtiRevoked(jti: string): Promise<boolean> {
-    const r = await this.cmd(['EXISTS', `mcp:revoked:jti:${jti}`]);
+    const r = await this.cmd(['EXISTS', `${this.prefix}:revoked:jti:${jti}`]);
     return r === 1 || r === '1';
   }
 
   async revokeSubject(sub: string, ttlSec: number): Promise<void> {
     await this.cmd([
       'SET',
-      `mcp:revoked:sub:${sub}`,
+      `${this.prefix}:revoked:sub:${sub}`,
       String(Math.floor(Date.now() / 1000)),
       'EX',
       String(ttlSec),
@@ -175,7 +195,7 @@ export class RedisAuthStateStore implements AuthStateStore {
   async isSubjectRevoked(sub: string, tokenIat?: number): Promise<boolean> {
     // GET, not EXISTS: the value is the revocation instant, and comparing it to
     // token.iat is what lets a re-authenticated user back in.
-    const r = await this.cmd(['GET', `mcp:revoked:sub:${sub}`]);
+    const r = await this.cmd(['GET', `${this.prefix}:revoked:sub:${sub}`]);
     if (r == null) return false;
     if (tokenIat == null) return true;
     const revokedAt = Number(r);
@@ -217,7 +237,10 @@ export function createAuthStateStore(env: NodeJS.ProcessEnv = process.env): Auth
   const url = env.UPSTASH_REDIS_REST_URL || env.KV_REST_API_URL;
   const token = env.UPSTASH_REDIS_REST_TOKEN || env.KV_REST_API_TOKEN;
   if (url && token) {
-    return new RedisAuthStateStore(url, token);
+    // Defaults to the issuer so two servers sharing a Redis stay separate
+    // without anyone having to remember to set this.
+    const prefix = env.AUTH_STATE_PREFIX?.trim() || env.MCP_ISSUER?.trim() || 'mcp';
+    return new RedisAuthStateStore(url, token, prefix);
   }
   throw new AuthStateUnavailableError(
     'Auth state backend not configured — set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN, ' +
