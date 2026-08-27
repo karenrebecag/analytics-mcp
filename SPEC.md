@@ -211,11 +211,18 @@ The server codifies business *criterion* — never reasoning. It knows facts
 the client LLM cannot know (how each tracker counts, what discrepancy is
 structural); it never decides what matters. No LLM inside the server, ever.
 
+**Audience principle:** the end reader of every answer built on this server
+is a person with ZERO analytics skills making business decisions. The
+semantic layer's job is to let the client LLM translate numbers into plain
+business language with honest caveats — so this audience is encoded in the
+prompts and metric definitions, not assumed.
+
 ```
 src/semantics/knowledge.ts
   # The codified criterion. Pure data module, no I/O, no env reads.
   # - METRIC_SEMANTICS: per canonical metric x source -> { native, definition,
-  #   caveats }  (e.g. cloudflare counts at the edge and includes some bots;
+  #   businessMeaning (plain language, no jargon: what this number tells a
+  #   decision-maker), caveats }  (e.g. cloudflare counts at the edge and includes some bots;
   #   ga4 counts post-JS and loses adblocked sessions). Native names and limits
   #   come from F1/F2 captures, not memory.
   # - EXPECTED_DISCREPANCY: per (metric, sourceA, sourceB) -> { maxRatio, reason }.
@@ -236,7 +243,17 @@ src/resources/index.ts
 src/prompts/interpret-query.ts
   # MCP prompt: how to read query() output — expected discrepancies are noted,
   # a failed source slot means "no data from X", never "zero traffic"; compare
-  # canonical metrics only.
+  # canonical metrics only. Audience rules: lead with the answer in business
+  # terms, use businessMeaning wording instead of metric names, state caveats
+  # in one plain sentence, and never require the reader to know what GA4 or
+  # Cloudflare are to understand the conclusion.
+src/prompts/site-report.ts
+  # MCP prompt "site-report" (args: site, period): the packaged recipe for the
+  # zero-skills user — walks the client through query across all bound sources,
+  # explain-discrepancy on conflicts, then a business-language summary:
+  # what happened, what changed, what deserves attention, what to check next.
+  # The server supplies the recipe and the criterion; the client does the
+  # reasoning and the writing.
 src/tools/explain-discrepancy.ts
   # { metric, sourceA, sourceB, valueA, valueB, site? } -> deterministic:
   # actual ratio vs EXPECTED_DISCREPANCY (site expectations override when
