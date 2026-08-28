@@ -10,4 +10,7 @@ export const INSTRUCTIONS =
   'For search questions use seo_opportunities (ranked by missed clicks) and ' +
   'explain_ctr_gap; both compare against the site own click-through curve rather ' +
   'than an industry benchmark. ai_referrals reports traffic arriving from AI ' +
-  'assistants — arrivals, never citations.';
+  'assistants — arrivals, never citations. ' +
+  'When explain_ctr_gap reports a page as underperforming, inspect_page reads what that page ' +
+  'actually says about itself, so the cause can be named instead of guessed. It reports mechanical ' +
+  'findings only and runs no JavaScript.';

@@ -460,10 +460,14 @@ src/page/allowlist.ts
   #   bindings: gsc.siteUrl (strip 'sc-domain:', else the URL origin), gsc.host,
   #   ga4.host, cloudflare.host. Configuration IS the allowlist; no argument
   #   reaches the network without passing through it.
-  # assertFetchable(url, hosts) throws unless: scheme https; host in hosts by
-  #   exact case-folded match (NEVER suffix matching — 'evil-example.com' must
-  #   not pass for 'example.com'); no userinfo in the URL; host is not an IP
-  #   literal, loopback or private name.
+  # Exact hosts and domain scopes are kept apart, because they are matched
+  #   differently and conflating them is how a suffix check becomes a hole. A
+  #   'sc-domain:' property genuinely covers its subdomains, so it contributes a
+  #   domain scope; every other binding contributes an exact host.
+  # assertFetchable(url, hosts) throws unless: scheme https; host matches an
+  #   exact binding case-folded, or equals a domain scope or ends with '.'+scope
+  #   — the dot is what keeps 'evil-example.com' out of 'example.com'; no
+  #   userinfo in the URL; host is not an IP literal, loopback or private name.
 src/page/fetch.ts
   # fetchPageSnapshot(url, hosts, opts?) -> PageFacts.
   # - assertFetchable runs FIRST, before a socket is opened.

@@ -135,3 +135,31 @@ describe('P-F2 query fan-out', () => {
     expect(calls).toBe(1);
   });
 });
+
+describe('P-F8 page fetch deadline', () => {
+  it('P-F8-1 a hung page gives up on its own deadline', async () => {
+    const { fetchPageSnapshot } = await import('../../dist/page/fetch.js');
+    const { allowedHostsForSite } = await import('../../dist/page/allowlist.js');
+    const hosts = allowedHostsForSite({
+      id: 'marketing-site',
+      name: 'Marketing website',
+      sources: { gsc: { siteUrl: 'sc-domain:example.com' } },
+    });
+
+    const started = Date.now();
+    await expect(
+      fetchPageSnapshot('https://example.com/slow', hosts, {
+        timeoutMs: 500,
+        fetchImpl: (_url, init) =>
+          new Promise((_resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error('server answered late')), 5_000);
+            init.signal.addEventListener('abort', () => {
+              clearTimeout(timer);
+              reject(new Error('aborted'));
+            });
+          }),
+      }),
+    ).rejects.toThrow(/example\.com/);
+    expect(Date.now() - started).toBeLessThan(1500);
+  });
+});

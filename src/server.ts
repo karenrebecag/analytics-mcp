@@ -11,12 +11,14 @@ import {
   handleExplainCtrGap,
   handleExplainDiscrepancy,
   handleGetSchema,
+  handleInspectPage,
   handleListSites,
   handleListSources,
   handleQuery,
   handleQueryRaw,
   handleSeoOpportunities,
   handleValidateQuery,
+  inspectPageSchema,
   listSitesSchema,
   listSourcesSchema,
   queryRawSchema,
@@ -142,6 +144,17 @@ export function createServer(): McpServer {
       annotations: READ_ONLY,
     },
     (args) => handleAiReferrals(args),
+  );
+
+  server.registerTool(
+    'inspect_page',
+    {
+      description:
+        'What one page says about itself: title, description, canonical, headings, status. Reports mechanical findings only, runs no JavaScript, and fetches only hosts bound to the site. Use it when explain_ctr_gap says a page underperforms.',
+      inputSchema: inspectPageSchema.shape,
+      annotations: READ_ONLY,
+    },
+    (args) => handleInspectPage(args),
   );
 
   registerResources(server);

@@ -8,3 +8,4 @@ export { validateQuerySchema, handleValidateQuery } from './validate-query.js';
 export { seoOpportunitiesSchema, handleSeoOpportunities } from './seo-opportunities.js';
 export { explainCtrGapSchema, handleExplainCtrGap } from './explain-ctr-gap.js';
 export { aiReferralsSchema, handleAiReferrals } from './ai-referrals.js';
+export { inspectPageSchema, handleInspectPage } from './inspect-page.js';

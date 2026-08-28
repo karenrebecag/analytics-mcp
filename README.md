@@ -106,6 +106,7 @@ service is the wrong trade.
 | `seo_opportunities` | Cheapest search wins, ranked by estimated missed clicks |
 | `explain_ctr_gap` | Is one page underperforming its position? Deterministic |
 | `ai_referrals` | Traffic arriving from AI assistants, by engine |
+| `inspect_page` | What one page says about itself: title, description, canonical, headings, status |
 
 Every tool is read-only. There are no write tools and none are planned.
 
@@ -143,6 +144,26 @@ assistant, broken down by engine. It states in every response that arrivals are
 people read an answer without clicking, and Search Console folds AI Overview
 appearances into ordinary impressions. There is deliberately no "GEO visibility
 score" here — it would be a fabricated number wearing a data costume.
+
+### Reading the page itself
+
+`inspect_page` fetches a page and reports what it says about itself, so a
+click-through verdict can name a cause rather than prescribe blind. It is
+deliberately narrow:
+
+- **Only hosts bound to the site.** The allowlist comes from your own
+  configuration, so no argument can point it at a host you never configured.
+  A `sc-domain:` Search Console property covers its subdomains, because that is
+  what the property covers; every other binding matches exactly.
+- **Redirects are reported, never followed.** A 301 on a page that ranks is a
+  finding worth having, and not following it removes a whole class of
+  server-side request forgery at the same time.
+- **No JavaScript is run.** A page that builds its title in the browser reports
+  no title here — which is also what a crawler sees, so the finding is correct
+  even though the page looks fine to you.
+- **Mechanical findings only.** Title length, missing description, duplicate
+  headings, a canonical pointing elsewhere, `noindex`, a non-200 status. Whether
+  the wording deserves the click is a judgement left to the reader.
 
 ### Resources and prompts
 

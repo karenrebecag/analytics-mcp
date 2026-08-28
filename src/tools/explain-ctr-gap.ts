@@ -9,8 +9,59 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { getSite, loadSites } from '../config/sites.js';
 import { jsonResult, runTool } from '../core/tool-result.js';
+import { allowedHostsForSite } from '../page/allowlist.js';
+import { fetchPageSnapshot } from '../page/fetch.js';
+import type { PageFacts, PageVerdict } from '../page/types.js';
+import { pageVerdicts } from '../page/verdicts.js';
 import { buildCtrCurve, expectedCtr } from '../seo/ctr-curve.js';
+import type { Site } from '../sources/types.js';
 import { fetchSearchRows } from './seo-opportunities.js';
+
+interface PageContext {
+  facts: PageFacts;
+  verdicts: PageVerdict[];
+}
+
+/**
+ * The page is evidence, not a dependency. An unreachable page degrades this
+ * tool to what it did before F8 — a verdict from search data alone — rather
+ * than failing a call the caller asked about search performance.
+ */
+async function readPageQuietly(
+  site: Site,
+  url: string,
+): Promise<{ page?: PageContext; pageNote?: string }> {
+  try {
+    const facts = await fetchPageSnapshot(url, allowedHostsForSite(site));
+    return { page: { facts, verdicts: pageVerdicts(facts) } };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    return {
+      pageNote: `The page could not be read, so this verdict uses search data alone: ${reason}`,
+    };
+  }
+}
+
+/** Rules that change what a searcher sees before they click. */
+const INVITATION_RULES = new Set([
+  'title-missing',
+  'title-long',
+  'title-short',
+  'description-missing',
+  'description-long',
+  'redirect',
+  'status',
+  'noindex',
+]);
+
+function suggestionFor(underperforming: boolean, page?: PageContext): string {
+  if (!underperforming) return 'To grow this page, aim at the ranking rather than the wording.';
+  const named = page?.verdicts.filter((verdict) => INVITATION_RULES.has(verdict.rule)) ?? [];
+  if (named.length > 0) {
+    return `The ranking is fine; the invitation is not. ${named.map((v) => v.finding).join(' ')}`;
+  }
+  return 'Rewrite the title and description to match what someone searching that topic wants. The ranking is fine; the invitation is not.';
+}
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be yyyy-mm-dd');
 
@@ -63,6 +114,7 @@ export async function handleExplainCtrGap(
 
     const missedClicks = Math.round(row.impressions * (expectation.ctr - actualCtr));
     const underperforming = actualCtr < expectation.ctr && missedClicks > 0;
+    const { page, pageNote } = await readPageQuietly(site, row.page);
     return jsonResult({
       ...base,
       expectedCtrPct: Number((expectation.ctr * 100).toFixed(2)),
@@ -76,9 +128,9 @@ export async function handleExplainCtrGap(
       reason: underperforming
         ? `People see this page as often as others at the same position, but click it far less — about ${missedClicks} clicks fewer than this site normally earns there.`
         : 'It earns what this site normally earns at that position, so the click-through is not the problem.',
-      suggestion: underperforming
-        ? 'Rewrite the title and description to match what someone searching that topic wants. The ranking is fine; the invitation is not.'
-        : 'To grow this page, aim at the ranking rather than the wording.',
+      ...(page ? { page } : {}),
+      ...(pageNote ? { pageNote } : {}),
+      suggestion: suggestionFor(underperforming, page),
     });
   });
 }
