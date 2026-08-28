@@ -10,6 +10,7 @@
 import type { HistoryStore } from './types.js';
 import { createMemoryHistory } from './memory.js';
 import { createUpstashHistory } from './upstash.js';
+import { redisRestConfig } from '../redis-env.js';
 
 export type { HistoryEntry, HistoryStore } from './types.js';
 export { createMemoryHistory } from './memory.js';
@@ -18,9 +19,8 @@ export { createUpstashHistory } from './upstash.js';
 export function createHistoryStore(
   env: Record<string, string | undefined> = process.env,
 ): HistoryStore | null {
-  const url = env.UPSTASH_REDIS_REST_URL ?? env.KV_REST_API_URL;
-  const token = env.UPSTASH_REDIS_REST_TOKEN ?? env.KV_REST_API_TOKEN;
-  if (url && token) return createUpstashHistory({ url, token });
+  const redis = redisRestConfig(env);
+  if (redis) return createUpstashHistory(redis);
   // On Vercel there is no process to keep anything in.
   if (env.VERCEL) return null;
   return createMemoryHistory();
