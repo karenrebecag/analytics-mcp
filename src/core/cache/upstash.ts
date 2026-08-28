@@ -8,16 +8,28 @@ export interface UpstashFetchResponse {
 
 export type UpstashFetch = (
   url: string,
-  init: { method: string; headers: Record<string, string>; body: string },
+  init: {
+    method: string;
+    headers: Record<string, string>;
+    body: string;
+    signal: AbortSignal;
+  },
 ) => Promise<UpstashFetchResponse>;
+
+// A cache is an optimisation. Without a deadline a slow Upstash stops being one
+// and becomes the thing the caller waits for, on a request it could have served
+// from the source instead.
+const DEFAULT_TIMEOUT_MS = 3_000;
 
 export function createUpstashCache(opts: {
   url: string;
   token: string;
+  timeoutMs?: number;
   fetchImpl?: UpstashFetch;
 }): CacheStore {
   const url = opts.url.replace(/\/$/, '');
   const token = opts.token;
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const fetchImpl: UpstashFetch =
     opts.fetchImpl ??
     (async (href, init) => {
@@ -35,6 +47,7 @@ export function createUpstashCache(opts: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch {
       // Swallow the cause: fetch errors and URLs can embed the token.

@@ -94,6 +94,19 @@ describe('upstash cache', () => {
       expect(message).not.toContain(TOKEN);
     }
   });
+
+  it('gives up on a hung request instead of waiting forever', async () => {
+    const cache = createUpstashCache({
+      url: 'https://example.upstash.io',
+      token: TOKEN,
+      timeoutMs: 20,
+      fetchImpl: (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init.signal.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
+    });
+    await expect(cache.get('k')).rejects.toThrow('Upstash request failed');
+  });
 });
 
 describe('createCacheStore', () => {
