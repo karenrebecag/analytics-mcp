@@ -7,6 +7,9 @@ dist/
 # ships sites.example.json; the real mapping lives only in env / this file.
 .env
 .env.*
+# ...except the template. It names every variable and holds no value, and an
+# ignored file rots unseen: nothing diffs it, so nobody notices when it breaks.
+!.env.example
 sites.config.json
 
 # Probe captures may contain live analytics data from a real tenant
