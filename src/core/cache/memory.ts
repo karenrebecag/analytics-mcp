@@ -15,5 +15,11 @@ export function createMemoryCache(): CacheStore {
     async set(key: string, value: string, ttlSec: number): Promise<void> {
       store.set(key, { value, expiresAt: Date.now() + ttlSec * 1000 });
     },
+    async setIfAbsent(key: string, value: string, ttlSec: number): Promise<boolean> {
+      const hit = store.get(key);
+      if (hit && hit.expiresAt > Date.now()) return false;
+      store.set(key, { value, expiresAt: Date.now() + ttlSec * 1000 });
+      return true;
+    },
   };
 }

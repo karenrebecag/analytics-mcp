@@ -79,5 +79,8 @@ export function createUpstashCache(opts: {
     async set(key: string, value: string, ttlSec: number): Promise<void> {
       await cmd(['SET', key, value, 'EX', ttlSec]);
     },
+    async setIfAbsent(key: string, value: string, ttlSec: number): Promise<boolean> {
+      return (await cmd(['SET', key, value, 'NX', 'EX', ttlSec])) === 'OK';
+    },
   };
 }
