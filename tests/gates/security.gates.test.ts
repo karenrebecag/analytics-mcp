@@ -220,3 +220,93 @@ describe('S-F6-1 the SEO layer judges only against the caller own data', () => {
     expect(expectedCtr(thin, 4)).toBeUndefined();
   });
 });
+
+const PAGE_SITES = JSON.stringify([
+  {
+    id: 'marketing-site',
+    name: 'Marketing website',
+    sources: { gsc: { siteUrl: 'sc-domain:example.com' } },
+  },
+]);
+
+async function withPageSites<T>(fn: () => Promise<T>): Promise<T> {
+  const previous = process.env.SITES_CONFIG;
+  process.env.SITES_CONFIG = PAGE_SITES;
+  try {
+    return await fn();
+  } finally {
+    if (previous === undefined) delete process.env.SITES_CONFIG;
+    else process.env.SITES_CONFIG = previous;
+  }
+}
+
+describe('S-F8-1 page fetch never reaches an unbound host', () => {
+  it('rejects lookalikes, literal addresses, http and userinfo without opening a socket', async () => {
+    const { setPageFetchForTests } = await import('../../dist/page/fetch.js');
+    const { handleInspectPage } = await import('../../dist/tools/inspect-page.js');
+
+    let calls = 0;
+    setPageFetchForTests(async () => {
+      calls += 1;
+      throw new Error('the allowlist let this through');
+    });
+
+    try {
+      await withPageSites(async () => {
+        const refused = [
+          'https://evil-example.com/a',
+          'https://example.com.attacker.test/a',
+          'http://example.com/a',
+          'https://user:pass@example.com/a',
+          'https://93.184.216.34/a',
+          'https://localhost/a',
+        ];
+        for (const url of refused) {
+          const result = await handleInspectPage({ site: 'marketing-site', url });
+          expect(result.isError, url).toBe(true);
+        }
+        expect(calls).toBe(0);
+      });
+    } finally {
+      setPageFetchForTests(null);
+    }
+  });
+});
+
+describe('S-F8-2 a redirect is reported, never followed', () => {
+  it('stops at the 3xx and does not request the target', async () => {
+    const { setPageFetchForTests } = await import('../../dist/page/fetch.js');
+    const { handleInspectPage } = await import('../../dist/tools/inspect-page.js');
+
+    const requested: string[] = [];
+    setPageFetchForTests(async (url, init) => {
+      requested.push(url);
+      expect(init.redirect).toBe('manual');
+      return {
+        status: 302,
+        headers: {
+          get: (name: string) =>
+            name.toLowerCase() === 'location' ? 'https://internal.attacker.test/admin' : null,
+        },
+        text: async () => '',
+      };
+    });
+
+    try {
+      await withPageSites(async () => {
+        const result = await handleInspectPage({
+          site: 'marketing-site',
+          url: 'https://example.com/a',
+        });
+        expect(result.isError).toBeFalsy();
+        const payload = JSON.parse(String(result.content[0]?.text)) as {
+          facts: { redirectTo?: string };
+        };
+        expect(payload.facts.redirectTo).toBe('https://internal.attacker.test/admin');
+        expect(requested).toEqual(['https://example.com/a']);
+      });
+    } finally {
+      setPageFetchForTests(null);
+    }
+  });
+});
