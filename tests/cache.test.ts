@@ -116,6 +116,25 @@ describe('createCacheStore', () => {
     expect(await cache.get('k')).toBe('v');
   });
 
+  it('accepts the names a Vercel Marketplace install injects', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ result: 'from-upstash' }),
+    } as Response);
+    try {
+      const cache = createCacheStore({
+        KV_REST_API_URL: 'https://example.upstash.io',
+        KV_REST_API_TOKEN: 'kv-token',
+      });
+      // Memory would answer null without ever reaching for the network.
+      expect(await cache.get('k')).toBe('from-upstash');
+      expect(fetchSpy).toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
   it('uses Upstash when both env vars are set', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
