@@ -148,6 +148,7 @@ describe('page verdicts', () => {
       metaDescriptionLength: 120,
       h1s: ['The heading'],
       headTruncated: false,
+      bodyTruncated: false,
       contentHash: 'hash',
       ...over,
     };
@@ -237,27 +238,51 @@ describe('page fetch', () => {
     expect(pageVerdicts(facts).map((v) => v.rule)).toEqual(['status']);
   });
 
-  it('stops reading at the end of the head', async () => {
-    const chunks = [
-      '<html><head><title>Read me</title></head>',
-      '<body>' + 'x'.repeat(10_000) + '</body>',
-    ];
-    let delivered = 0;
+  /** Real pages put </head> thousands of bytes before the h1. */
+  function streamed(chunks: string[], counter?: { delivered: number }): PageFetch {
+    return async () => ({
+      status: 200,
+      headers: { get: () => null },
+      body: (async function* () {
+        for (const chunk of chunks) {
+          if (counter) counter.delivered += 1;
+          yield new TextEncoder().encode(chunk);
+        }
+      })(),
+    });
+  }
+
+  it('keeps reading past the head, where the h1 actually lives', async () => {
+    const counter = { delivered: 0 };
     const facts = await fetchPageSnapshot('https://example.com/a', allowed, {
       lookupImpl: publicLookup,
-      fetchImpl: async () => ({
-        status: 200,
-        headers: { get: () => null },
-        body: (async function* () {
-          for (const chunk of chunks) {
-            delivered += 1;
-            yield new TextEncoder().encode(chunk);
-          }
-        })(),
-      }),
+      fetchImpl: streamed(
+        ['<html><head><title>Read me</title></head>', '<body><h1>The heading</h1></body>'],
+        counter,
+      ),
     });
     expect(facts.title).toBe('Read me');
-    expect(delivered).toBe(1);
+    expect(facts.h1s).toEqual(['The heading']);
+    expect(facts.headTruncated).toBe(false);
+    expect(facts.bodyTruncated).toBe(false);
+    expect(counter.delivered).toBe(2);
+  });
+
+  it('never reports a missing h1 for a body it stopped reading', async () => {
+    const facts = await fetchPageSnapshot('https://example.com/a', allowed, {
+      lookupImpl: publicLookup,
+      maxBytes: 64,
+      // The cap is crossed by chunk two, so chunk three — the one holding the
+      // h1 — is never delivered. That is the shape of a real long page.
+      fetchImpl: streamed([
+        '<html><head><title>Read me</title></head><body>',
+        'x'.repeat(5_000),
+        '<h1>Far below the cap</h1></body>',
+      ]),
+    });
+    expect(facts.bodyTruncated).toBe(true);
+    expect(facts.h1s).toEqual([]);
+    expect(pageVerdicts(facts).map((v) => v.rule)).not.toContain('h1-missing');
   });
 
   it('gives up on a hung page instead of waiting forever', async () => {

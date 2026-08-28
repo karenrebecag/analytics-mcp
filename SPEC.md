@@ -451,10 +451,13 @@ and judgment belongs to the client.
 src/page/types.ts
   # PageFacts: url, fetchedAt, status, redirectTo?, title?, titleLength?,
   #   metaDescription?, metaDescriptionLength?, canonical?, h1s, robotsMeta?,
-  #   ogTitle?, ogDescription?, headTruncated, contentHash.
+  #   ogTitle?, ogDescription?, headTruncated, bodyTruncated, contentHash.
   # Optional everywhere except url/fetchedAt/status/headTruncated/contentHash:
   #   "the tag is absent" and "we could not read that far" are different
   #   findings, and the type must keep them apart (headTruncated separates them).
+  # bodyTruncated says the byte cap was hit, so an h1 past it was never looked
+  #   at rather than absent. The h1 rules MUST stay silent when it is set — the
+  #   same discipline headTruncated already imposes on the title rules.
 src/page/allowlist.ts
   # allowedHostsForSite(site) -> Set<string>, derived ONLY from the site's own
   #   bindings: gsc.siteUrl (strip 'sc-domain:', else the URL origin), gsc.host,
@@ -486,7 +489,10 @@ src/page/fetch.ts
   #   removes the redirect-to-internal-host SSRF class outright, and a 301 on a
   #   ranking page is a real SEO fact the report should carry anyway.
   # - AbortSignal.timeout (default 5s) plus a byte cap (default 512KB) read from
-  #   the stream, stopping once </head> is seen. Take the timeout discipline
+  #   the stream. Do NOT stop at </head>: the h1 lives in the body, and the
+  #   version that stopped there reported every page as having no heading.
+  #   Stopping early is only safe when nothing downstream reads past the stop,
+  #   which the reader cannot know. Take the timeout discipline
   #   from WebflowATOM_mcp api/_shared/kv.ts — this repo's own
   #   core/cache/upstash.ts is still missing it.
   # - A non-2xx is a returned fact, not a thrown error. "Your ranking page

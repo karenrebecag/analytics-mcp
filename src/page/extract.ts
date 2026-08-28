@@ -58,6 +58,7 @@ export interface TransportFacts {
   status: number;
   fetchedAt: string;
   redirectTo?: string;
+  bodyTruncated?: boolean;
 }
 
 export function extractPageFacts(html: string, transport: TransportFacts): PageFacts {
@@ -99,6 +100,7 @@ export function extractPageFacts(html: string, transport: TransportFacts): PageF
     ...(ogTitle ? { ogTitle } : {}),
     ...(ogDescription ? { ogDescription } : {}),
     headTruncated,
+    bodyTruncated: transport.bodyTruncated ?? false,
   };
 
   return { ...facts, contentHash: hashFacts(facts) };

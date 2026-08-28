@@ -22,6 +22,8 @@ export interface PageFacts {
   ogTitle?: string;
   ogDescription?: string;
   headTruncated: boolean;
+  /** The byte cap was hit, so anything past it — an h1 included — was not read. */
+  bodyTruncated: boolean;
   /** sha256 over the normalized facts — see extract.ts for what is included. */
   contentHash: string;
 }
