@@ -64,21 +64,34 @@ export interface FetchPageOptions {
   now?: () => Date;
 }
 
-/** Stops at the end of the head, or at the byte cap, whichever comes first. */
-async function readCapped(res: PageResponse, maxBytes: number): Promise<string> {
+/**
+ * Reads to the byte cap. An earlier version stopped at </head> to save
+ * bandwidth, which was wrong: the h1 lives in the body, so every page came back
+ * with none and the h1 rules accused pages that were fine. Stopping early is
+ * only safe when nothing downstream reads past the stop, and that is not a
+ * property the reader can know.
+ */
+async function readCapped(
+  res: PageResponse,
+  maxBytes: number,
+): Promise<{ html: string; truncated: boolean }> {
   if (!res.body) {
     const text = res.text ? await res.text() : '';
-    return text.slice(0, maxBytes);
+    return { html: text.slice(0, maxBytes), truncated: text.length > maxBytes };
   }
   const decoder = new TextDecoder();
   let html = '';
   let bytes = 0;
+  let truncated = false;
   for await (const chunk of res.body) {
     bytes += chunk.byteLength;
     html += decoder.decode(chunk, { stream: true });
-    if (bytes >= maxBytes || /<\/head\s*>/i.test(html)) break;
+    if (bytes >= maxBytes) {
+      truncated = true;
+      break;
+    }
   }
-  return html + decoder.decode();
+  return { html: html + decoder.decode(), truncated };
 }
 
 export async function fetchPageSnapshot(
@@ -124,12 +137,13 @@ export async function fetchPageSnapshot(
 
   const isRedirect = res.status >= 300 && res.status < 400;
   const location = isRedirect ? (res.headers.get('location') ?? undefined) : undefined;
-  const html = isRedirect ? '' : await readCapped(res, maxBytes);
+  const read = isRedirect ? { html: '', truncated: false } : await readCapped(res, maxBytes);
 
-  return extractPageFacts(html, {
+  return extractPageFacts(read.html, {
     url: url.toString(),
     status: res.status,
     fetchedAt: now().toISOString(),
+    bodyTruncated: read.truncated,
     ...(location ? { redirectTo: location } : {}),
   });
 }

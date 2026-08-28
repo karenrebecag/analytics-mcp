@@ -99,7 +99,9 @@ export function pageVerdicts(facts: PageFacts): PageVerdict[] {
     });
   }
 
-  if (facts.h1s.length === 0 && !facts.headTruncated) {
+  // Never accuse on a partial read: an h1 past the byte cap was not absent, it
+  // was never looked at. Same discipline as headTruncated above.
+  if (facts.h1s.length === 0 && !facts.headTruncated && !facts.bodyTruncated) {
     verdicts.push({
       rule: 'h1-missing',
       finding: 'This page has no main heading.',
