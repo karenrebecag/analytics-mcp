@@ -155,6 +155,9 @@ deliberately narrow:
   configuration, so no argument can point it at a host you never configured.
   A `sc-domain:` Search Console property covers its subdomains, because that is
   what the property covers; every other binding matches exactly.
+- **A bound name still has to point outward.** Every address a host resolves to
+  is checked before connecting, so a forgotten subdomain aimed at the internal
+  network is refused even though its name is legitimately yours.
 - **Redirects are reported, never followed.** A 301 on a page that ranks is a
   finding worth having, and not following it removes a whole class of
   server-side request forgery at the same time.

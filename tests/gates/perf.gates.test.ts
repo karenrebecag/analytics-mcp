@@ -150,6 +150,7 @@ describe('P-F8 page fetch deadline', () => {
     await expect(
       fetchPageSnapshot('https://example.com/slow', hosts, {
         timeoutMs: 500,
+        lookupImpl: async () => [{ address: '93.184.216.34' }],
         fetchImpl: (_url, init) =>
           new Promise((_resolve, reject) => {
             const timer = setTimeout(() => reject(new Error('server answered late')), 5_000);

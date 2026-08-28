@@ -468,9 +468,20 @@ src/page/allowlist.ts
   #   exact binding case-folded, or equals a domain scope or ends with '.'+scope
   #   — the dot is what keeps 'evil-example.com' out of 'example.com'; no
   #   userinfo in the URL; host is not an IP literal, loopback or private name.
+  # assertPublicAddress(hostname, lookup) — the host check answers "is this
+  #   ours", not "does it point outward". A forgotten subdomain with a dangling
+  #   record, or an unaudited wildcard, resolves wherever its owner chose. Every
+  #   resolved address is checked (not the first: the client may pick any),
+  #   rejecting loopback, private, link-local — where cloud metadata lives —
+  #   CGNAT, multicast and reserved ranges, including IPv4 mapped into IPv6.
+  #   Carries a HACK marker: fetch resolves again when it connects, so a short
+  #   TTL can still move a name between check and connection. Pinning needs an
+  #   undici Agent, which §1 freezes out.
 src/page/fetch.ts
   # fetchPageSnapshot(url, hosts, opts?) -> PageFacts.
-  # - assertFetchable runs FIRST, before a socket is opened.
+  # - assertFetchable runs FIRST, before a name is even resolved, then
+  #   assertPublicAddress before a socket is opened. Both are injectable so the
+  #   suite never touches DNS.
   # - redirect: 'manual'. A 3xx is REPORTED as redirectTo, never followed. That
   #   removes the redirect-to-internal-host SSRF class outright, and a 301 on a
   #   ranking page is a real SEO fact the report should carry anyway.
@@ -519,7 +530,7 @@ README.md
   -> headTruncated true; hash stable across irrelevant HTML churn and moving
   when a fact moves); a test per verdict rule; allowlist tests covering suffix
   tricks, IP literals, userinfo URLs and http.
-  Gates S-F8-1, S-F8-2, P-F8-1.
+  Gates S-F8-1, S-F8-2, S-F8-3, P-F8-1.
   EXPLICITLY OUT: crawling past the exact URL asked for — no link following, no
   sitemap walk; that is a crawler and a different architecture. Rendering
   JavaScript: a headless browser breaks both the serverless shape and the frozen
@@ -636,6 +647,7 @@ Included in `pnpm verify`. Budget: ~15–20 tests total at F5 — no padding.
 | S-F4-1 | F4 | stdio session: every stdout line parses as JSON-RPC (logs never leak into the MCP channel) |
 | S-F8-1 | F8 | `assertFetchable` rejects before any socket opens: `https://evil-example.com` against an allowlist of `example.com` (suffix trick), an IP literal, `http://`, and a URL carrying userinfo — injected fetch proves zero calls |
 | S-F8-2 | F8 | A 302 to another host is reported as `redirectTo` and NOT followed (injected fetch called exactly once) |
+| S-F8-3 | F8 | A host inside the allowlist that resolves to a private address is refused before any socket opens |
 | S-F9-1 | F9 | `/api/cron/capture` → 401 with no Bearer, with a wrong Bearer, and when `CRON_SECRET` is unset (fail closed) |
 | S-F9-2 | F9 | With a null history store, every history-backed tool answers "no earlier capture" and never throws; store credentials never appear in output |
 

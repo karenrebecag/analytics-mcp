@@ -5,6 +5,7 @@ import {
   isAllowedHost,
   type AllowedHosts,
 } from '../src/page/allowlist.js';
+import { isPrivateAddress, type HostLookup } from '../src/page/allowlist.js';
 import { extractPageFacts, hashFacts } from '../src/page/extract.js';
 import { fetchPageSnapshot, type PageFetch, type PageResponse } from '../src/page/fetch.js';
 import type { PageFacts } from '../src/page/types.js';
@@ -20,6 +21,9 @@ function site(sources: Site['sources']): Site {
 function hosts(sources: Site['sources']): AllowedHosts {
   return allowedHostsForSite(site(sources));
 }
+
+/** Tests never touch DNS: every lookup is answered here. */
+const publicLookup: HostLookup = async () => [{ address: '93.184.216.34' }];
 
 function response(status: number, html: string, location?: string): PageResponse {
   return {
@@ -205,23 +209,29 @@ describe('page fetch', () => {
       expect(init.redirect).toBe('manual');
       return response(302, '', 'https://internal.attacker.test/');
     };
-    const facts = await fetchPageSnapshot('https://example.com/a', allowed, { fetchImpl });
+    const facts = await fetchPageSnapshot('https://example.com/a', allowed, {
+      fetchImpl,
+      lookupImpl: publicLookup,
+    });
     expect(calls).toHaveLength(1);
     expect(facts.status).toBe(302);
     expect(facts.redirectTo).toBe('https://internal.attacker.test/');
   });
 
-  it('never opens a socket for a host outside the allowlist', async () => {
+  it('never opens a socket, or even resolves a name, outside the allowlist', async () => {
     const fetchImpl = vi.fn();
+    const lookupImpl = vi.fn();
     await expect(
-      fetchPageSnapshot('https://evil-example.com/a', allowed, { fetchImpl }),
+      fetchPageSnapshot('https://evil-example.com/a', allowed, { fetchImpl, lookupImpl }),
     ).rejects.toThrow('not bound to this site');
     expect(fetchImpl).not.toHaveBeenCalled();
+    expect(lookupImpl).not.toHaveBeenCalled();
   });
 
   it('returns a failing status as a fact rather than an error', async () => {
     const facts = await fetchPageSnapshot('https://example.com/gone', allowed, {
       fetchImpl: async () => response(404, '<html><head></head><body>nope</body></html>'),
+      lookupImpl: publicLookup,
     });
     expect(facts.status).toBe(404);
     expect(pageVerdicts(facts).map((v) => v.rule)).toEqual(['status']);
@@ -234,6 +244,7 @@ describe('page fetch', () => {
     ];
     let delivered = 0;
     const facts = await fetchPageSnapshot('https://example.com/a', allowed, {
+      lookupImpl: publicLookup,
       fetchImpl: async () => ({
         status: 200,
         headers: { get: () => null },
@@ -255,7 +266,72 @@ describe('page fetch', () => {
         init.signal.addEventListener('abort', () => reject(new Error('aborted')));
       });
     await expect(
-      fetchPageSnapshot('https://example.com/a', allowed, { fetchImpl, timeoutMs: 20 }),
+      fetchPageSnapshot('https://example.com/a', allowed, {
+        fetchImpl,
+        timeoutMs: 20,
+        lookupImpl: publicLookup,
+      }),
     ).rejects.toThrow(/example\.com/);
+  });
+});
+
+describe('resolved address guard', () => {
+  const allowed = hosts({ gsc: { siteUrl: 'sc-domain:example.com' } });
+
+  it('classifies the addresses a bound name must never point at', () => {
+    const refused = [
+      '127.0.0.1',
+      '10.1.2.3',
+      '172.16.0.1',
+      '172.31.255.254',
+      '192.168.1.1',
+      '169.254.169.254',
+      '100.64.0.1',
+      '0.0.0.0',
+      '::1',
+      '::',
+      'fd00::1',
+      'fe80::1',
+      '::ffff:127.0.0.1',
+      '::ffff:10.0.0.1',
+      'not-an-address',
+    ];
+    for (const address of refused) {
+      expect(isPrivateAddress(address), address).toBe(true);
+    }
+    for (const address of ['93.184.216.34', '8.8.8.8', '172.32.0.1', '2606:2800:220:1::1']) {
+      expect(isPrivateAddress(address), address).toBe(false);
+    }
+  });
+
+  it('refuses a forgotten subdomain pointed at the internal network', async () => {
+    const fetchImpl = vi.fn();
+    await expect(
+      fetchPageSnapshot('https://old-campaign.example.com/', allowed, {
+        fetchImpl,
+        lookupImpl: async () => [{ address: '10.0.0.5' }],
+      }),
+    ).rejects.toThrow('private address');
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('refuses when any of several addresses is private', async () => {
+    const fetchImpl = vi.fn();
+    await expect(
+      fetchPageSnapshot('https://staging.example.com/', allowed, {
+        fetchImpl,
+        lookupImpl: async () => [{ address: '93.184.216.34' }, { address: '169.254.169.254' }],
+      }),
+    ).rejects.toThrow('private address');
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('refuses a name that resolves to nothing', async () => {
+    await expect(
+      fetchPageSnapshot('https://gone.example.com/', allowed, {
+        fetchImpl: vi.fn(),
+        lookupImpl: async () => [],
+      }),
+    ).rejects.toThrow('resolves to nothing');
   });
 });
