@@ -9,3 +9,4 @@ export { seoOpportunitiesSchema, handleSeoOpportunities } from './seo-opportunit
 export { explainCtrGapSchema, handleExplainCtrGap } from './explain-ctr-gap.js';
 export { aiReferralsSchema, handleAiReferrals } from './ai-referrals.js';
 export { inspectPageSchema, handleInspectPage } from './inspect-page.js';
+export { pageChangesSchema, handlePageChanges } from './page-changes.js';

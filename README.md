@@ -107,6 +107,7 @@ service is the wrong trade.
 | `explain_ctr_gap` | Is one page underperforming its position? Deterministic |
 | `ai_referrals` | Traffic arriving from AI assistants, by engine |
 | `inspect_page` | What one page says about itself: title, description, canonical, headings, status |
+| `page_changes` | What changed on a page and when, with the search numbers either side |
 
 Every tool is read-only. There are no write tools and none are planned.
 
@@ -167,6 +168,36 @@ deliberately narrow:
 - **Mechanical findings only.** Title length, missing description, duplicate
   headings, a canonical pointing elsewhere, `noindex`, a non-200 status. Whether
   the wording deserves the click is a judgement left to the reader.
+
+### Did the change work
+
+`page_changes` is the only tool here that reads something this server wrote
+itself. A nightly job records how each page looks and **writes only when the
+content hash moves**, so the store holds a change log rather than a time
+series — two or three entries a year for a page nobody edits, instead of 365
+identical ones.
+
+That also makes a repeated run harmless, which matters: Vercel documents cron
+delivery as best effort, able to both miss a run and deliver the same one
+twice, and it never retries a failure. A duplicate run has to be a no-op.
+
+What is deliberately **not** stored: metrics. Search Console keeps sixteen
+months of those and is the system of record; a second, worse copy would be a
+liability, not an asset. Only page state — which nobody else keeps — is written.
+
+**It is optional.** With no store configured the tools say they have nothing
+recorded instead of failing, and everything else works exactly as before.
+
+```
+UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN   the store (also used by the cache,
+                                                    under a separate keyspace)
+CRON_SECRET                                         required for the scheduled capture
+```
+
+Locally there is no scheduler, so `pnpm capture` runs the same job on demand.
+
+Sizing: fifty pages captured daily, written only on change, stays under 2K
+commands a month against Upstash's 500K free tier.
 
 ### Resources and prompts
 

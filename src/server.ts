@@ -14,6 +14,7 @@ import {
   handleInspectPage,
   handleListSites,
   handleListSources,
+  handlePageChanges,
   handleQuery,
   handleQueryRaw,
   handleSeoOpportunities,
@@ -21,6 +22,7 @@ import {
   inspectPageSchema,
   listSitesSchema,
   listSourcesSchema,
+  pageChangesSchema,
   queryRawSchema,
   querySchema,
   seoOpportunitiesSchema,
@@ -155,6 +157,17 @@ export function createServer(): McpServer {
       annotations: READ_ONLY,
     },
     (args) => handleInspectPage(args),
+  );
+
+  server.registerTool(
+    'page_changes',
+    {
+      description:
+        'What changed on a page and when, from this server own recordings, with the search numbers either side of the last change. Only changes are stored, so a page with no entries has not moved since recording began. Correlation in time, never proof of cause.',
+      inputSchema: pageChangesSchema.shape,
+      annotations: READ_ONLY,
+    },
+    (args) => handlePageChanges(args),
   );
 
   registerResources(server);

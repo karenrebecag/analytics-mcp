@@ -13,4 +13,7 @@ export const INSTRUCTIONS =
   'assistants — arrivals, never citations. ' +
   'When explain_ctr_gap reports a page as underperforming, inspect_page reads what that page ' +
   'actually says about itself, so the cause can be named instead of guessed. It reports mechanical ' +
-  'findings only and runs no JavaScript.';
+  'findings only and runs no JavaScript. ' +
+  'page_changes answers whether an edit helped: it reports what this server recorded ' +
+  'changing on a page and the search numbers either side. It is optional — without a ' +
+  'history store it says so rather than guessing.';

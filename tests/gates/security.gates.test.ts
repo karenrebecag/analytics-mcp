@@ -344,3 +344,51 @@ describe('S-F8-3 a bound name pointing inward is still refused', () => {
     }
   });
 });
+
+describe('S-F9-1 the capture cron is closed by default', () => {
+  it('401s with no Bearer, a wrong Bearer, and an unset CRON_SECRET', async () => {
+    const { default: capture } = await import('../../api/cron/capture.js');
+    const { mockRequest, mockResponse } = await import('../helpers/http.js');
+    const previous = process.env.CRON_SECRET;
+
+    try {
+      // An unset secret must read as closed. A deployment that forgot to set it
+      // would otherwise expose a job that makes outbound requests.
+      delete process.env.CRON_SECRET;
+      const unset = mockResponse();
+      await capture(mockRequest({ headers: { authorization: 'Bearer anything' } }), unset);
+      expect(unset.captured.status).toBe(401);
+
+      process.env.CRON_SECRET = 'gate-cron-secret-value';
+      for (const headers of [{}, { authorization: 'Bearer wrong' }, { authorization: 'wrong' }]) {
+        const res = mockResponse();
+        await capture(mockRequest({ headers }), res);
+        expect(res.captured.status, JSON.stringify(headers)).toBe(401);
+        expect(res.captured.body).not.toContain('gate-cron-secret-value');
+      }
+    } finally {
+      if (previous === undefined) delete process.env.CRON_SECRET;
+      else process.env.CRON_SECRET = previous;
+    }
+  });
+});
+
+describe('S-F9-2 an absent history store degrades, never throws', () => {
+  it('answers plainly and keeps store credentials out of the response', async () => {
+    const { setHistoryStoreForTests } = await import('../../dist/core/history/index.js');
+    const { handlePageChanges } = await import('../../dist/tools/page-changes.js');
+
+    setHistoryStoreForTests(null, true);
+    try {
+      await withPageSites(async () => {
+        const result = await handlePageChanges({ site: 'marketing-site' });
+        expect(result.isError).toBeFalsy();
+        const text = String(result.content[0]?.text);
+        expect(text).toContain('No history store is configured');
+        expect(text).not.toContain('UPSTASH_REDIS_REST_TOKEN=');
+      });
+    } finally {
+      setHistoryStoreForTests(null, false);
+    }
+  });
+});

@@ -13,6 +13,7 @@
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "probe": "tsx scripts/probe.ts",
+    "capture": "tsx scripts/capture.ts",
     "check": "tsc --noEmit && tsc --noEmit -p tsconfig.check.json && tsc --noEmit -p tsconfig.test.json",
     "lint": "eslint src/ api/ tests/",
     "format": "prettier --write 'src/**/*.ts' 'api/**/*.ts' 'tests/**/*.ts'",

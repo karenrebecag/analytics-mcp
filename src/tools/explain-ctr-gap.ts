@@ -9,7 +9,9 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { getSite, loadSites } from '../config/sites.js';
 import { jsonResult, runTool } from '../core/tool-result.js';
+import { getHistoryStore } from '../core/history/index.js';
 import { allowedHostsForSite } from '../page/allowlist.js';
+import { historyKey } from '../page/capture.js';
 import { fetchPageSnapshot } from '../page/fetch.js';
 import type { PageFacts, PageVerdict } from '../page/types.js';
 import { pageVerdicts } from '../page/verdicts.js';
@@ -39,6 +41,24 @@ async function readPageQuietly(
     return {
       pageNote: `The page could not be read, so this verdict uses search data alone: ${reason}`,
     };
+  }
+}
+
+/**
+ * When the page was last edited, if F9 has been recording. The first entry is
+ * the baseline — the day capture started — so a key holding only that has not
+ * seen a change and says nothing.
+ */
+async function lastChangedAt(siteId: string, url: string): Promise<string | undefined> {
+  const history = getHistoryStore();
+  if (!history) return undefined;
+  try {
+    const entries = await history.range(historyKey(siteId, url), 0, Date.now());
+    if (entries.length < 2) return undefined;
+    return (JSON.parse(entries[entries.length - 1].value) as PageFacts).fetchedAt;
+  } catch {
+    // History is evidence, never a dependency.
+    return undefined;
   }
 }
 
@@ -115,6 +135,7 @@ export async function handleExplainCtrGap(
     const missedClicks = Math.round(row.impressions * (expectation.ctr - actualCtr));
     const underperforming = actualCtr < expectation.ctr && missedClicks > 0;
     const { page, pageNote } = await readPageQuietly(site, row.page);
+    const changedAt = await lastChangedAt(args.site, row.page);
     return jsonResult({
       ...base,
       expectedCtrPct: Number((expectation.ctr * 100).toFixed(2)),
@@ -130,6 +151,13 @@ export async function handleExplainCtrGap(
         : 'It earns what this site normally earns at that position, so the click-through is not the problem.',
       ...(page ? { page } : {}),
       ...(pageNote ? { pageNote } : {}),
+      ...(changedAt
+        ? {
+            lastChangedAt: changedAt,
+            lastChangedNote:
+              'This page was last recorded changing on that date. Use page_changes for what moved and what the search numbers did either side.',
+          }
+        : {}),
       suggestion: suggestionFor(underperforming, page),
     });
   });
