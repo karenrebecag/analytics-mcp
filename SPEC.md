@@ -22,7 +22,9 @@ deployment. Only `sites.example.json` with fictitious ids is committed.
 **The seam.** `createServer()` is host-agnostic. Environment switching exists
 in exactly two places: entry points (`api/mcp.ts`, `src/index.ts`,
 `src/serve.ts`) and `src/sources/registry.ts`. An environment `if` inside a
-tool is a bug.
+tool is a bug. Store factories (`core/cache/index.ts`, and `core/history/`
+from F9) resolve their own backend from env — that is a backend choice, not
+environment switching, and the choice never reaches a tool.
 
 **Probe before typing.** No adapter is typed against a guessed response
 shape — even for documented APIs. `pnpm probe` captures real responses to
@@ -31,7 +33,9 @@ shape — even for documented APIs. `pnpm probe` captures real responses to
 **Dependencies are frozen.** Runtime: `@modelcontextprotocol/sdk`, `zod`;
 F3 adds `jose` and `@clerk/backend`. Nothing else without a spec change.
 GA4/GSC service-account JWTs are signed with `node:crypto` (RS256), not a
-Google SDK.
+Google SDK. F8 and F9 add nothing either: the head scanner is hand-rolled
+rather than a DOM library, hashes come from `node:crypto`, and the history
+store speaks Upstash REST over `fetch` exactly as the cache does.
 
 ---
 
@@ -432,6 +436,173 @@ src/sources/gsc.ts
   prevent, and one it committed itself until this phase.
 ```
 
+### Phase F8 — page context (after F7)
+
+The measurement layers answer *what happened*. None of them can see the page
+they are talking about: `explain_ctr_gap` already closes with "Rewrite the
+title and description" without ever having read the title. F8 closes that gap
+using the one source that needs no new credential — the site itself.
+
+Same rule as F2.5 and F6: the server reports facts and deterministic rule
+violations. Whether the wording actually matches search intent is judgment,
+and judgment belongs to the client.
+
+```
+src/page/types.ts
+  # PageFacts: url, fetchedAt, status, redirectTo?, title?, titleLength?,
+  #   metaDescription?, metaDescriptionLength?, canonical?, h1s, robotsMeta?,
+  #   ogTitle?, ogDescription?, headTruncated, contentHash.
+  # Optional everywhere except url/fetchedAt/status/headTruncated/contentHash:
+  #   "the tag is absent" and "we could not read that far" are different
+  #   findings, and the type must keep them apart (headTruncated separates them).
+src/page/allowlist.ts
+  # allowedHostsForSite(site) -> Set<string>, derived ONLY from the site's own
+  #   bindings: gsc.siteUrl (strip 'sc-domain:', else the URL origin), gsc.host,
+  #   ga4.host, cloudflare.host. Configuration IS the allowlist; no argument
+  #   reaches the network without passing through it.
+  # assertFetchable(url, hosts) throws unless: scheme https; host in hosts by
+  #   exact case-folded match (NEVER suffix matching — 'evil-example.com' must
+  #   not pass for 'example.com'); no userinfo in the URL; host is not an IP
+  #   literal, loopback or private name.
+src/page/fetch.ts
+  # fetchPageSnapshot(url, hosts, opts?) -> PageFacts.
+  # - assertFetchable runs FIRST, before a socket is opened.
+  # - redirect: 'manual'. A 3xx is REPORTED as redirectTo, never followed. That
+  #   removes the redirect-to-internal-host SSRF class outright, and a 301 on a
+  #   ranking page is a real SEO fact the report should carry anyway.
+  # - AbortSignal.timeout (default 5s) plus a byte cap (default 512KB) read from
+  #   the stream, stopping once </head> is seen. Take the timeout discipline
+  #   from WebflowATOM_mcp api/_shared/kv.ts — this repo's own
+  #   core/cache/upstash.ts is still missing it.
+  # - A non-2xx is a returned fact, not a thrown error. "Your ranking page
+  #   returns 404" is the most valuable thing this tool can ever say.
+src/page/extract.ts
+  # Pure: (html, url) -> the parsed fields. No parser dependency — §1 freezes
+  #   the dependency list, so this is a tolerant scanner over the <head> region
+  #   plus the first <h1>s. A tag that cannot be read with confidence leaves its
+  #   field undefined; this file never guesses.
+  # contentHash = sha256 (node:crypto) over the NORMALIZED facts, never over raw
+  #   HTML. Raw HTML shifts on every deploy (build ids, nonces, cache busters);
+  #   hashing it would make F9's change log pure noise.
+src/page/verdicts.ts
+  # Deterministic rules only, each carrying the fact that triggered it: title
+  #   missing / over TITLE_MAX / under TITLE_MIN; description missing or over
+  #   DESC_MAX; zero or multiple h1; canonical pointing elsewhere; robots
+  #   noindex; non-200 status; redirect present.
+  # Thresholds are named constants whose comment states they are conventions
+  #   about pixel truncation, NOT measurements of this site — the same honesty
+  #   the CTR curve applies to itself.
+  # NEVER: "the title does not match intent", any score, any ranking of pages
+  #   against one another. That is interpretation and it belongs to F2.5.
+src/tools/inspect-page.ts
+  # { site, url } -> facts + verdicts. Standalone; useful with no F9.
+src/tools/explain-ctr-gap.ts   (MODIFIED)
+  # When the page is fetchable, attach { facts, verdicts } to the existing
+  # verdict so the suggestion can name the cause instead of prescribing blind.
+  # A fetch failure degrades to today's output plus a note — never a tool error.
+src/instructions.ts, src/server.ts, src/tools/index.ts
+  # Register inspect_page; point the client at it whenever a CTR verdict comes
+  # back underperforming.
+README.md
+  # Add inspect_page to the tool table and state the two limits plainly: no
+  # JavaScript is rendered, so a page that ships an empty shell reports no
+  # title — which is what the crawler sees too, and therefore the right answer.
+  CONFIGURATION: F8 adds NO environment variables. Timeout and byte cap are
+  named constants overridable per call through `opts`, which exists so tests can
+  drive them; it is not a deployment knob. Setup cost for an existing
+  deployment stays exactly zero.
+  CRITERIA: extract unit tests (absent tag -> undefined, not ''; truncated head
+  -> headTruncated true; hash stable across irrelevant HTML churn and moving
+  when a fact moves); a test per verdict rule; allowlist tests covering suffix
+  tricks, IP literals, userinfo URLs and http.
+  Gates S-F8-1, S-F8-2, P-F8-1.
+  EXPLICITLY OUT: crawling past the exact URL asked for — no link following, no
+  sitemap walk; that is a crawler and a different architecture. Rendering
+  JavaScript: a headless browser breaks both the serverless shape and the frozen
+  dependency list. robots.txt negotiation: this fetches pages you own, one at a
+  time, on your own instruction.
+  WHY IT MATTERS: the SEO layer diagnoses correctly and prescribes blind. Naming
+  the cause is what turns a number nobody can act on into a task somebody can be
+  handed.
+```
+
+### Phase F9 — change log (after F8)
+
+```
+src/core/history/types.ts
+  # HistoryStore, deliberately NOT CacheStore. A cache expires by design; a
+  # history that expires is corrupted. WebflowATOM_mcp's api/_shared/kv.ts made
+  # the same separation against auth-state and documented why.
+  #   append(key, at, value) / latestBefore(key, at) / range(key, from, to,
+  #   limit?) / prune(key, before)
+src/core/history/memory.ts
+  # Sorted array per key. Honest ONLY under stdio. uikit-atom-mcp's
+  # client-registry.ts records what a module-level Map cost this codebase in a
+  # serverless deployment: state that does not outlive the instance is a silent
+  # bug, not a fallback.
+src/core/history/upstash.ts
+  # One sorted set per key: ZADD score=timestamp member=JSON, ZRANGEBYSCORE to
+  # read (O(log N + M)), ZREMRANGEBYSCORE to prune. Upstash REST covers the
+  # SortedSet family. Prefix 'hist:' — never the cache's keyspace. No SDK:
+  # fetch against the REST endpoint, with a timeout, and the token never
+  # reaching an error message.
+src/core/history/index.ts
+  # createHistoryStore(env) -> HistoryStore | null. Upstash when
+  # UPSTASH_REDIS_REST_URL/_TOKEN (or KV_REST_API_*) are set; memory under
+  # stdio; NULL in a serverless entry with nothing configured.
+  # The null is the contract: absent history degrades to "no earlier capture to
+  # compare against". It never throws, and it never pretends to remember.
+src/page/capture.ts
+  # captureSite(siteId, opts) -> summary. For each of the top N pages by
+  # impressions from GSC (default 50): fetch, extract, compare contentHash with
+  # latestBefore(now), append ONLY when it differs.
+  # That is what makes this a change log rather than a time series: two or three
+  # entries per page per year instead of 365 identical ones. It also buys
+  # idempotence for free, which is required — Vercel documents cron delivery as
+  # best effort, able to both miss and duplicate a run, and it never retries a
+  # failure. A duplicate run must be a no-op. This one is.
+  # Serial, with a small delay between pages: this is your own origin.
+  # Fails soft per page, like SalesforceATFX_mcp's cache-prewarm — one dead URL
+  # must not abort the run.
+api/cron/capture.ts
+  # Vercel cron entry. Reject unless the Authorization header equals
+  # `Bearer ${CRON_SECRET}`, compared with timingSafeEqual; 401 when CRON_SECRET
+  # is unset — an unset secret must never read as "open". Take a lock through
+  # setIfAbsent before running: Vercel warns that invocations can overlap.
+vercel.json
+  # crons: [{ "path": "/api/cron/capture", "schedule": "0 6 * * *" }]. Daily is
+  # the right cadence; titles do not change hourly. Pro allows per-minute and
+  # fires within the named minute — that headroom is not a reason to spend it.
+scripts/capture.ts + package.json
+  # "capture": "tsx scripts/capture.ts" — the stdio equivalent of the cron. No
+  # scheduler exists locally, so capture runs on demand or from the operator's
+  # own. A script entry is not a dependency change.
+src/tools/page-changes.ts
+  # { site, page?, range? } -> what changed and when, each entry diffed against
+  # its predecessor field by field (title was X, is now Y).
+  # When Search Console covers both sides of a change date, attach the before
+  # and after numbers — the loop this phase exists to close. State every time
+  # that coincidence in time is not proof of cause; other things also moved.
+src/tools/explain-ctr-gap.ts   (MODIFIED)
+  # Annotate with the date of the last change when history holds one.
+.env.example, README.md
+  # Document the store as OPTIONAL and say precisely what is lost without it.
+  CRITERIA: one contract suite run against both store implementations; capture
+  writes nothing when the hash is unchanged; every history-backed tool degrades
+  cleanly against a null store.
+  Gates S-F9-1, S-F9-2.
+  EXPLICITLY OUT: storing metrics. Search Console keeps 16 months and is the
+  system of record; a second, worse copy of numbers Google already holds is not
+  an asset. Only page state — which nobody else stores — is written here.
+  WHY IT MATTERS: without it, nobody can show that a change worked. With it,
+  "you rewrote this title on the 12th and CTR went from 0.04% to 0.7%" is a
+  sentence the server can produce from its own records.
+  SIZING (why this stays free): 50 pages, captured daily, written only on
+  change — under 2K commands a month against Upstash's 500K free tier, and a
+  few MB against its 256MB.
+```
+
+
 ---
 
 ## 3. Phase gates — `tests/gates/` (the tripwire)
@@ -459,6 +630,10 @@ Included in `pnpm verify`. Budget: ~15–20 tests total at F5 — no padding.
 | S-F3-5 | F3 | /mcp without Bearer → 401 + `WWW-Authenticate: Bearer` |
 | S-F6-1 | F6 | The CTR curve is derived only from the caller's own rows: `src/seo/` reads no env, no config and no hardcoded benchmark table; a thin bucket returns undefined instead of a number |
 | S-F4-1 | F4 | stdio session: every stdout line parses as JSON-RPC (logs never leak into the MCP channel) |
+| S-F8-1 | F8 | `assertFetchable` rejects before any socket opens: `https://evil-example.com` against an allowlist of `example.com` (suffix trick), an IP literal, `http://`, and a URL carrying userinfo — injected fetch proves zero calls |
+| S-F8-2 | F8 | A 302 to another host is reported as `redirectTo` and NOT followed (injected fetch called exactly once) |
+| S-F9-1 | F9 | `/api/cron/capture` → 401 with no Bearer, with a wrong Bearer, and when `CRON_SECRET` is unset (fail closed) |
+| S-F9-2 | F9 | With a null history store, every history-backed tool answers "no earlier capture" and never throws; store credentials never appear in output |
 
 ### Performance suite — `tests/gates/perf.gates.test.ts`
 
@@ -472,6 +647,7 @@ serial fan-out or an accidental sync-blocking import.
 | P-F2-2 | F2 | 1 source hung 5 s, timeout 500 ms → response returns, slow slot = timeout error, other slots intact | < 1500 ms |
 | P-F2-3 | F2 | Identical `query` twice → upstream called exactly once (second hit from cache) | call-count, no timer |
 | P-F3-1 | F3 | `api/mcp` handler in-process, auth mocked, sources injected → initialize + tools/list | < 2000 ms |
+| P-F8-1 | F8 | Injected page fetch hung 5 s, timeout set to 500 ms → `inspect_page` returns a timeout fact, other fields intact | < 1500 ms |
 
 ---
 
@@ -486,3 +662,9 @@ serial fan-out or an accidental sync-blocking import.
 
 F1 requires real credentials in local env before agents run `pnpm probe`; the
 captures then get fictitious ids substituted before any fixture is committed.
+
+F8 and F9 require no new credentials. Their tests inject `fetch`, so the whole
+suite runs offline: no page is really retrieved, no store is really written.
+Two things cannot be proven locally and must be checked once in a deployment —
+that Vercel actually invokes `/api/cron/capture` on schedule, and that it sends
+`Authorization: Bearer $CRON_SECRET`. Everything else is a gate.
