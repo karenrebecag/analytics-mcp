@@ -3,7 +3,12 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { getSite, loadSites } from '../config/sites.js';
 import { getCacheStore } from '../core/cache/index.js';
-import { canonicalizeRows, discrepancyNotes, planSourceMetrics } from '../core/normalize.js';
+import {
+  canonicalizeRows,
+  discrepancyNotes,
+  partialDayCaveat,
+  planSourceMetrics,
+} from '../core/normalize.js';
 import { jsonResult, runTool } from '../core/tool-result.js';
 import { allSources } from '../sources/registry.js';
 import { SOURCE_IDS, type BindingFor, type QueryResult, type SourceId } from '../sources/types.js';
@@ -65,12 +70,14 @@ export async function handleQuery(args: z.infer<typeof querySchema>): Promise<Ca
     }
 
     const notes = discrepancyNotes(results);
+    const caveat = partialDayCaveat(results, args.range.end);
     return jsonResult({
       site: args.site,
       range: args.range,
       results,
       ...(errors.length ? { errors } : {}),
       ...(notes.length ? { notes } : {}),
+      ...(caveat ? { comparabilityCaveat: caveat } : {}),
     });
   });
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canonicalizeRows,
   discrepancyNotes,
+  partialDayCaveat,
   planSourceMetrics,
   toCanonical,
   toNative,
@@ -51,5 +52,33 @@ describe('normalize', () => {
     expect(discrepancyNotes(results)).toEqual([
       'ga4.pageviews=100 vs vercel.pageviews=150 (Δ 33%)',
     ]);
+  });
+});
+
+describe('partial-day caveat', () => {
+  const now = new Date('2026-08-28T15:00:00Z');
+  const mixed = [
+    { source: 'ga4' as const, timezone: 'America/Panama', rows: [] },
+    { source: 'cloudflare' as const, timezone: 'UTC', rows: [] },
+  ];
+
+  it('warns when the range includes today and timezones differ', () => {
+    // Cloudflare is 15 hours into the day, GA4 is 10: the gap is partly clock.
+    const note = partialDayCaveat(mixed, '2026-08-28', now);
+    expect(note).toContain('America/Panama');
+    expect(note).toContain('UTC');
+    expect(note).toMatch(/clock, not the tracking/i);
+  });
+
+  it('stays quiet for a complete past range', () => {
+    expect(partialDayCaveat(mixed, '2026-08-27', now)).toBeNull();
+  });
+
+  it('stays quiet when every source shares a timezone', () => {
+    const same = [
+      { source: 'ga4' as const, timezone: 'UTC', rows: [] },
+      { source: 'cloudflare' as const, timezone: 'UTC', rows: [] },
+    ];
+    expect(partialDayCaveat(same, '2026-08-28', now)).toBeNull();
   });
 });

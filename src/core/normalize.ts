@@ -90,6 +90,27 @@ export function canonicalizeRows(
   });
 }
 
+/**
+ * Two sources reporting in different timezones do not share a "today": one may
+ * be five hours into the day while the other is ten. Comparing them over a
+ * range that includes today measures the clock as much as the tracking, and a
+ * gap that looks alarming can be pure artefact.
+ */
+export function partialDayCaveat(
+  results: QueryResult[],
+  rangeEnd: string,
+  now: Date = new Date(),
+): string | null {
+  const zones = [...new Set(results.map((r) => r.timezone))];
+  if (zones.length < 2) return null;
+  if (rangeEnd < now.toISOString().slice(0, 10)) return null;
+  return (
+    `This range includes today and these sources report in different timezones (${zones.join(', ')}), ` +
+    'so their day started at different moments and covers a different number of hours. ' +
+    'Part of any gap above is the clock, not the tracking — compare complete past days to judge.'
+  );
+}
+
 /** Compare the same canonical metric across sources. Timezones are reported, never converted. */
 export function discrepancyNotes(results: QueryResult[]): string[] {
   const notes: string[] = [];
