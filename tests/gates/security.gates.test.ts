@@ -275,9 +275,11 @@ describe('S-F8-1 page fetch never reaches an unbound host', () => {
 
 describe('S-F8-2 a redirect is reported, never followed', () => {
   it('stops at the 3xx and does not request the target', async () => {
-    const { setPageFetchForTests } = await import('../../dist/page/fetch.js');
+    const { setPageFetchForTests, setHostLookupForTests } =
+      await import('../../dist/page/fetch.js');
     const { handleInspectPage } = await import('../../dist/tools/inspect-page.js');
 
+    setHostLookupForTests(async () => [{ address: '93.184.216.34' }]);
     const requested: string[] = [];
     setPageFetchForTests(async (url, init) => {
       requested.push(url);
@@ -307,6 +309,38 @@ describe('S-F8-2 a redirect is reported, never followed', () => {
       });
     } finally {
       setPageFetchForTests(null);
+      setHostLookupForTests(null);
+    }
+  });
+});
+
+describe('S-F8-3 a bound name pointing inward is still refused', () => {
+  it('refuses a subdomain that resolves to a private address', async () => {
+    const { setPageFetchForTests, setHostLookupForTests } =
+      await import('../../dist/page/fetch.js');
+    const { handleInspectPage } = await import('../../dist/tools/inspect-page.js');
+
+    let calls = 0;
+    setPageFetchForTests(async () => {
+      calls += 1;
+      throw new Error('the address guard let this through');
+    });
+    // The name is inside the sc-domain scope; only its address disqualifies it.
+    setHostLookupForTests(async () => [{ address: '169.254.169.254' }]);
+
+    try {
+      await withPageSites(async () => {
+        const result = await handleInspectPage({
+          site: 'marketing-site',
+          url: 'https://old-campaign.example.com/',
+        });
+        expect(result.isError).toBe(true);
+        expect(String(result.content[0]?.text)).toContain('private address');
+        expect(calls).toBe(0);
+      });
+    } finally {
+      setPageFetchForTests(null);
+      setHostLookupForTests(null);
     }
   });
 });

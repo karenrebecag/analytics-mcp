@@ -8,7 +8,13 @@
  * a fact rather than thrown: "your ranking page returns 404" is the single most
  * valuable thing this tool can say.
  */
-import { assertFetchable, type AllowedHosts } from './allowlist.js';
+import { lookup as dnsLookup } from 'node:dns/promises';
+import {
+  assertFetchable,
+  assertPublicAddress,
+  type AllowedHosts,
+  type HostLookup,
+} from './allowlist.js';
 import { extractPageFacts } from './extract.js';
 import type { PageFacts } from './types.js';
 
@@ -38,15 +44,23 @@ export type PageFetch = (
  * real process, where passing opts through a tool call is not possible.
  */
 let injectedFetch: PageFetch | null = null;
+let injectedLookup: HostLookup | null = null;
 
 export function setPageFetchForTests(impl: PageFetch | null): void {
   injectedFetch = impl;
 }
 
+export function setHostLookupForTests(impl: HostLookup | null): void {
+  injectedLookup = impl;
+}
+
+const defaultLookup: HostLookup = (hostname) => dnsLookup(hostname, { all: true, verbatim: true });
+
 export interface FetchPageOptions {
   timeoutMs?: number;
   maxBytes?: number;
   fetchImpl?: PageFetch;
+  lookupImpl?: HostLookup;
   now?: () => Date;
 }
 
@@ -78,6 +92,10 @@ export async function fetchPageSnapshot(
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxBytes = opts.maxBytes ?? DEFAULT_MAX_BYTES;
   const now = opts.now ?? (() => new Date());
+
+  // The name is bound to this site; that does not yet mean it points outward.
+  await assertPublicAddress(url.hostname, opts.lookupImpl ?? injectedLookup ?? defaultLookup);
+
   const fetchImpl: PageFetch =
     opts.fetchImpl ??
     injectedFetch ??
